@@ -17,3 +17,7 @@ release/
 
 Thumbs.db
 Desktop.ini
+
+Releases/
+publish/
+*.nupkg

@@ -1,5 +1,9 @@
+; 注意：1.1.0 起推荐使用 Velopack 安装程序（见 scripts/Publish-Release.ps1）。
+; 用本脚本打出的安装包无法使用软件内的一键更新。已安装 1.0.0 的用户
+; 需要手动运行一次新的 Velopack Setup，之后即可在软件里检查更新。
+
 #define AppName "数据匹配助手"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppPublisher "Seul_SC_照晨"
 #define AppExeName "DataMatchingAssistant.exe"
 
@@ -19,11 +23,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir=..\release
-OutputBaseFilename=数据匹配助手-安装包-v1.0.0
+OutputBaseFilename=数据匹配助手-安装包-v1.1.0
 SetupIconFile=..\StudentScoreTool\Assets\app.ico
 UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExeName}
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion=1.1.0.0
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName}安装程序
 VersionInfoProductName={#AppName}
