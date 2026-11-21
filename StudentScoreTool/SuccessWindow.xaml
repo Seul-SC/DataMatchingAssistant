@@ -1,0 +1,41 @@
+<Window x:Class="StudentScoreTool.SuccessWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="处理完成"
+        Width="600"
+        MinWidth="520"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Icon="/Assets/app.png"
+        Background="{DynamicResource WindowBackgroundBrush}">
+    <StackPanel Margin="28,24,28,24">
+        <StackPanel x:Name="StickerPanel" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+        <TextBlock Text="处理完成" FontSize="22" FontWeight="SemiBold"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+        <TextBlock x:Name="MessageTextBlock" Margin="0,10,0,0" FontSize="16"
+                   TextWrapping="Wrap" LineHeight="24" TextAlignment="Center"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+        <Border Margin="0,22,0,0" Padding="16,14"
+                Background="{DynamicResource CardBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1" CornerRadius="12">
+            <StackPanel>
+                <TextBlock x:Name="SummaryTextBlock" FontSize="13.5" TextWrapping="Wrap"
+                           LineHeight="22" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock x:Name="NoteTextBlock" Margin="0,10,0,0" FontSize="13" TextWrapping="Wrap"
+                           LineHeight="20" Foreground="{DynamicResource TextPrimaryBrush}"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+
+        <Button Content="好的" Width="108" Height="40" Margin="0,22,0,0"
+                HorizontalAlignment="Right"
+                Style="{StaticResource PrimaryButton}"
+                FontSize="14"
+                IsDefault="True" IsCancel="True" Click="Close_Click"/>
+    </StackPanel>
+</Window>

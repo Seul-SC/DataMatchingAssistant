@@ -1,12 +1,15 @@
-﻿using System.Configuration;
-using System.Data;
 using System.Windows;
+using StudentScoreTool.Services;
+using StudentScoreTool.Themes;
 
 namespace StudentScoreTool;
 
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
 public partial class App : Application
 {
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        var settings = AppSettings.Load();
+        ThemeManager.Apply(settings.Theme);
+        base.OnStartup(e);
+    }
 }
