@@ -17,6 +17,9 @@ public sealed record ThemePalette(
     string AccentSoft,
     string Danger,
     string Success,
+    string Attention,
+    string AttentionHover,
+    string AttentionForeground,
     string Swatch)
 {
     public static ThemePalette For(AppTheme theme) => theme switch
@@ -54,6 +57,9 @@ public sealed record ThemePalette(
         AccentSoft: "#EDF3FF",
         Danger: "#DC2626",
         Success: "#108548",
+        Attention: "#B45309",
+        AttentionHover: "#92400E",
+        AttentionForeground: "#FFFFFF",
         Swatch: "#F3F4F6");
 
     // 深色：深灰表面分层，主按钮用亮蓝底配深色文字，保证对比度。
@@ -74,6 +80,9 @@ public sealed record ThemePalette(
         AccentSoft: "#243F73",
         Danger: "#F87171",
         Success: "#4ADE80",
+        Attention: "#FBBF24",
+        AttentionHover: "#FCD34D",
+        AttentionForeground: "#1A1304",
         Swatch: "#1B1D21");
 
     // 薄荷绿：#98FF98 只作为点缀色，背景用淡薄荷中性色，主按钮用深绿配白字。
@@ -94,6 +103,9 @@ public sealed record ThemePalette(
         AccentSoft: "#CFF8CF",
         Danger: "#C62828",
         Success: "#157A45",
+        Attention: "#C2410C",
+        AttentionHover: "#9A3412",
+        AttentionForeground: "#FFFFFF",
         Swatch: "#98FF98");
 
     // 深薄荷：#3EB489 作为装饰色，窗口用深绿中性底；主按钮用 #98FF98 配深色文字。
@@ -114,5 +126,8 @@ public sealed record ThemePalette(
         AccentSoft: "#215C48",
         Danger: "#F87171",
         Success: "#98FF98",
+        Attention: "#FBBF24",
+        AttentionHover: "#FCD34D",
+        AttentionForeground: "#0C241C",
         Swatch: "#3EB489");
 }

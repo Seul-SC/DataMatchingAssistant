@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
@@ -11,6 +12,11 @@ public sealed class ExcelProcessor
     [
         "提交时间", "状态", "院系", "专业", "班级", "序号", "平均", "四舍五入",
         "排名", "总分", "总成绩", "任课", "课程", "导出时间", "备注"
+    ];
+    private static readonly string[] TextGrades =
+    [
+        "优", "良", "中", "差", "及格", "不及格", "缺考", "免修", "缓考", "通过", "不通过",
+        "合格", "不合格", "作弊", "旷考", "补考"
     ];
 
     public IReadOnlyList<SheetOption> InspectSheets(string path, SheetRole role)
@@ -46,13 +52,15 @@ public sealed class ExcelProcessor
     public Task<ProcessResult> ProcessAsync(
         ProcessRequest request,
         bool createBackup,
-        Func<IReadOnlyList<ScoreIssue>, Task<bool>> confirmIssues,
+        Func<IReadOnlyList<OverwriteCandidate>, Task<IReadOnlyList<string>>> confirmOverwrites,
         IProgress<string>? progress = null)
     {
         return Task.Run(async () =>
         {
             ValidatePath(request.SourcePath);
             ValidatePath(request.TargetPath);
+            var sourceFileName = Path.GetFileName(request.SourcePath);
+            var targetFileName = Path.GetFileName(request.TargetPath);
             progress?.Report("正在识别表格结构…");
 
             using var sourceBook = OpenWorkbook(request.SourcePath);
@@ -87,15 +95,28 @@ public sealed class ExcelProcessor
             var matches = MatchStudents(sourceLayout.Students, targetLayout.Students, issues);
             var writes = new List<WritePlan>();
             var blankScoreCount = 0;
+            var pendingOverwrites = new List<PendingOverwrite>();
 
             foreach (var match in matches.OrderBy(item => item.Target.Row))
             {
                 foreach (var mapping in mappings)
                 {
                     var sourceCell = sourceSheet.Cell(match.Source.Row, mapping.Source.Column);
-                    if (sourceCell.IsEmpty())
+                    var columnTitle = mapping.Target.FullHeader;
+                    if (IsEffectivelyEmpty(sourceCell))
                     {
                         blankScoreCount++;
+                        var targetCellForBlank = targetSheet.Cell(match.Target.Row, mapping.Target.Column);
+                        var original = FormatScore(GetCellValue(targetCellForBlank), targetCellForBlank);
+                        issues.Add(new ScoreIssue(
+                            IssueCategories.BlankSource,
+                            match.Target.DisplayName,
+                            $"「{columnTitle}」名单原成绩：{original}；成绩表该格为空，已保持原样。",
+                            GetDisplayId(match),
+                            "名单原成绩",
+                            original,
+                            "成绩表",
+                            "空"));
                         continue;
                     }
 
@@ -103,22 +124,71 @@ public sealed class ExcelProcessor
                     if (targetCell.HasFormula)
                     {
                         issues.Add(new ScoreIssue(
-                            "公式未覆盖",
-                            match.Target.Name,
-                            $"{targetCell.Address} 是公式单元格，已跳过。"));
+                            IssueCategories.FormulaSkipped,
+                            match.Target.DisplayName,
+                            $"{targetCell.Address} 是公式单元格，已跳过。",
+                            GetDisplayId(match)));
                         continue;
                     }
 
-                    writes.Add(new WritePlan(
-                        match.Target.Row,
-                        mapping.Target.Column,
-                        GetCellValue(sourceCell)));
+                    var incoming = GetCellValue(sourceCell);
+                    var outOfRangeIssue = TryCreateOutOfRangeIssue(match, columnTitle, incoming);
+                    if (IsEffectivelyEmpty(targetCell) || ScoresEqual(GetCellValue(targetCell), incoming))
+                    {
+                        writes.Add(new WritePlan(match.Target.Row, mapping.Target.Column, incoming));
+                        if (outOfRangeIssue is not null)
+                        {
+                            issues.Add(outOfRangeIssue);
+                        }
+
+                        continue;
+                    }
+
+                    var currentText = FormatScore(GetCellValue(targetCell), targetCell);
+                    var incomingText = FormatScore(incoming, sourceCell);
+                    var key = $"{match.Target.Row}:{mapping.Target.Column}";
+                    pendingOverwrites.Add(new PendingOverwrite(
+                        new OverwriteCandidate(
+                            key,
+                            match.Target.DisplayName,
+                            GetDisplayId(match),
+                            columnTitle,
+                            currentText,
+                            incomingText),
+                        new WritePlan(match.Target.Row, mapping.Target.Column, incoming),
+                        outOfRangeIssue));
                 }
             }
 
-            if (issues.Count > 0 && !await confirmIssues(issues))
+            if (pendingOverwrites.Count > 0)
             {
-                throw new OperationCanceledException();
+                progress?.Report("发现已有成绩与新成绩不同，等待确认…");
+                var approved = new HashSet<string>(
+                    await confirmOverwrites(pendingOverwrites.Select(item => item.Candidate).ToList()),
+                    StringComparer.Ordinal);
+                foreach (var item in pendingOverwrites)
+                {
+                    if (approved.Contains(item.Candidate.Key))
+                    {
+                        writes.Add(item.Write);
+                        if (item.OutOfRangeIssue is not null)
+                        {
+                            issues.Add(item.OutOfRangeIssue);
+                        }
+                    }
+                    else
+                    {
+                        issues.Add(new ScoreIssue(
+                            IssueCategories.OverwriteSkipped,
+                            item.Candidate.StudentName,
+                            $"「{item.Candidate.ScoreColumn}」原成绩 {item.Candidate.CurrentValue}，新成绩 {item.Candidate.IncomingValue}，已按你的选择保留原成绩。",
+                            item.Candidate.StudentId,
+                            "原成绩",
+                            item.Candidate.CurrentValue,
+                            "新成绩",
+                            item.Candidate.IncomingValue));
+                    }
+                }
             }
 
             if (writes.Count == 0)
@@ -130,7 +200,10 @@ public sealed class ExcelProcessor
                     matches.Count,
                     0,
                     blankScoreCount,
-                    issues);
+                    issues,
+                    null,
+                    sourceFileName,
+                    targetFileName);
             }
 
             progress?.Report("正在写入并校验成绩…");
@@ -147,18 +220,13 @@ public sealed class ExcelProcessor
                 matches.Count,
                 blankScoreCount,
                 issues,
-                createBackup);
+                createBackup,
+                sourceFileName,
+                targetFileName);
         });
     }
 
-    private static XLWorkbook OpenWorkbook(string path)
-    {
-        using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var memory = new MemoryStream();
-        input.CopyTo(memory);
-        memory.Position = 0;
-        return new XLWorkbook(memory);
-    }
+    private static XLWorkbook OpenWorkbook(string path) => SpreadsheetLoader.OpenAsWorkbook(path);
 
     private static IXLWorksheet SelectSheet(IXLWorkbook workbook, SheetRole role, string? requestedName)
     {
@@ -260,19 +328,25 @@ public sealed class ExcelProcessor
         var students = new List<StudentRow>();
         for (var row = dataStartRow; row <= lastRow; row++)
         {
-            var name = NormalizeName(sheet.Cell(row, nameColumn).GetFormattedString());
-            if (name.Length == 0 || IsNameHeader(name) || name is "合计" or "总计" or "平均分")
+            var rawName = sheet.Cell(row, nameColumn).GetFormattedString();
+            var displayName = TextNormalization.DisplayText(rawName);
+            var name = TextNormalization.NormalizeName(rawName);
+            if (name.Length == 0 || IsNameHeader(rawName) || name is "合计" or "总计" or "平均分")
             {
                 continue;
             }
 
-            var id = idColumn == 0
-                ? string.Empty
-                : NormalizeIdentifier(sheet.Cell(row, idColumn).GetFormattedString());
+            var rawId = idColumn == 0 ? string.Empty : sheet.Cell(row, idColumn).GetFormattedString();
             var gender = genderColumn == 0
                 ? string.Empty
                 : NormalizeGender(sheet.Cell(row, genderColumn).GetFormattedString());
-            students.Add(new StudentRow(row, name, id, gender));
+            students.Add(new StudentRow(
+                row,
+                displayName,
+                name,
+                TextNormalization.DisplayText(rawId),
+                TextNormalization.NormalizeId(rawId),
+                gender));
         }
 
         return new SheetLayout(
@@ -362,7 +436,7 @@ public sealed class ExcelProcessor
     {
         var values = layout.Students
             .Select(student => sheet.Cell(student.Row, column))
-            .Where(cell => !cell.IsEmpty())
+            .Where(cell => !IsEffectivelyEmpty(cell))
             .ToList();
         if (values.Count == 0)
         {
@@ -371,14 +445,25 @@ public sealed class ExcelProcessor
 
         var numericCount = values.Count(cell =>
             cell.DataType == XLDataType.Number
-            || double.TryParse(cell.GetFormattedString(), out _));
+            || TextNormalization.TryParseScoreNumber(cell.GetFormattedString(), out _));
         if (numericCount >= Math.Max(1, (int)Math.Ceiling(values.Count * 0.7)))
         {
             return true;
         }
 
-        var textGrades = new[] { "优", "良", "中", "差", "及格", "不及格", "缺考", "免修", "缓考", "通过", "不通过" };
-        return values.All(cell => textGrades.Contains(NormalizeText(cell.GetFormattedString())));
+        return values.All(cell => LooksLikeTextGrade(NormalizeText(cell.GetFormattedString())));
+    }
+
+    private static bool LooksLikeTextGrade(string text)
+    {
+        if (TextGrades.Contains(text))
+        {
+            return true;
+        }
+
+        return text.Length is > 0 and <= 10
+            && !text.Contains('：')
+            && !text.Contains(':');
     }
 
     private static List<ScoreMapping> MapScoreColumns(
@@ -413,7 +498,7 @@ public sealed class ExcelProcessor
             if (target is null)
             {
                 issues.Add(new ScoreIssue(
-                    "成绩列未写入",
+                    IssueCategories.ColumnUnmapped,
                     string.Empty,
                     $"名单表没有与“{source.FullHeader}”对应的已有成绩列，未新增列。"));
                 continue;
@@ -449,94 +534,169 @@ public sealed class ExcelProcessor
         List<ScoreIssue> issues)
     {
         var matches = new List<StudentMatch>();
-        var sourceGroups = sourceStudents.GroupBy(student => student.Name).ToList();
-        var targetNames = targetStudents.Select(student => student.Name).ToHashSet();
+        var usedSources = new HashSet<StudentRow>();
+        var usedTargets = new HashSet<StudentRow>();
 
-        foreach (var sourceGroup in sourceGroups)
+        var targetsById = targetStudents
+            .Where(student => student.HasId)
+            .GroupBy(student => student.NormalizedId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        foreach (var sourceGroup in sourceStudents.Where(student => student.HasId).GroupBy(student => student.NormalizedId))
         {
-            var targets = targetStudents.Where(student => student.Name == sourceGroup.Key).ToList();
-            var sources = sourceGroup.ToList();
-            if (targets.Count == 0)
+            if (!targetsById.TryGetValue(sourceGroup.Key, out var idTargets))
             {
-                foreach (var source in sources)
-                {
-                    issues.Add(new ScoreIssue("名单中没有该学生", source.Name, "未添加学生行，该生的成绩未写入。"));
-                }
                 continue;
             }
 
-            if (sources.Count == 1 && targets.Count == 1)
+            var idSources = sourceGroup.ToList();
+            if (idSources.Count != 1 || idTargets.Count != 1)
             {
-                var source = sources[0];
-                var target = targets[0];
-                if (HasIdentifierConflict(source, target))
+                foreach (var student in idSources.Concat(idTargets))
                 {
                     issues.Add(new ScoreIssue(
-                        "学号冲突",
-                        target.Name,
-                        $"唯一姓名匹配，但学号不一致（成绩表：{source.Id}；名单表：{target.Id}），未写入。"));
+                        IssueCategories.DuplicateIdUnresolved,
+                        student.DisplayName,
+                        $"学号 {PreferDisplayId(idSources[0], idTargets[0])} 在成绩表或名单里不唯一，未按学号匹配。",
+                        PreferDisplayId(idSources[0], idTargets[0])));
                 }
-                else
+
+                foreach (var student in idSources)
                 {
-                    matches.Add(new StudentMatch(source, target));
+                    usedSources.Add(student);
                 }
+
+                foreach (var student in idTargets)
+                {
+                    usedTargets.Add(student);
+                }
+
                 continue;
             }
 
-            var remainingSources = new List<StudentRow>(sources);
-            var remainingTargets = new List<StudentRow>(targets);
-
-            foreach (var target in targets.Where(student => student.Id.Length > 0))
+            var source = idSources[0];
+            var target = idTargets[0];
+            matches.Add(new StudentMatch(source, target));
+            usedSources.Add(source);
+            usedTargets.Add(target);
+            if (source.NormalizedName != target.NormalizedName)
             {
-                var idMatches = remainingSources.Where(source => source.Id == target.Id).ToList();
-                if (idMatches.Count == 1)
-                {
-                    matches.Add(new StudentMatch(idMatches[0], target));
-                    remainingSources.Remove(idMatches[0]);
-                    remainingTargets.Remove(target);
-                }
+                var idText = PreferDisplayId(source, target);
+                issues.Add(new ScoreIssue(
+                    IssueCategories.NameMismatch,
+                    target.DisplayName,
+                    $"学号 {idText}：成绩表「{source.DisplayName}」 vs 名单「{target.DisplayName}」。已按学号写入成绩。",
+                    idText,
+                    "成绩表",
+                    source.DisplayName,
+                    "名单",
+                    target.DisplayName));
+            }
+        }
+
+        var remainingSources = sourceStudents.Where(student => !usedSources.Contains(student)).ToList();
+        var remainingTargets = targetStudents.Where(student => !usedTargets.Contains(student)).ToList();
+
+        foreach (var sourceGroup in remainingSources.GroupBy(student => student.NormalizedName))
+        {
+            var sources = sourceGroup.ToList();
+            var targets = remainingTargets
+                .Where(student => student.NormalizedName == sourceGroup.Key && !usedTargets.Contains(student))
+                .ToList();
+            if (targets.Count == 0)
+            {
+                continue;
             }
 
-            foreach (var genderGroup in remainingTargets
+            if (sources.Count == 1 && targets.Count == 1 && CanNameMatch(sources[0], targets[0]))
+            {
+                matches.Add(new StudentMatch(sources[0], targets[0]));
+                usedSources.Add(sources[0]);
+                usedTargets.Add(targets[0]);
+                continue;
+            }
+
+            var leftoverSources = new List<StudentRow>(sources.Where(student => !usedSources.Contains(student)));
+            var leftoverTargets = new List<StudentRow>(targets.Where(student => !usedTargets.Contains(student)));
+
+            foreach (var genderGroup in leftoverTargets
                 .Where(student => student.Gender.Length > 0)
                 .GroupBy(student => student.Gender)
                 .ToList())
             {
-                var genderSources = remainingSources
-                    .Where(source => source.Gender == genderGroup.Key)
+                var genderTargets = genderGroup.ToList();
+                var genderSources = leftoverSources
+                    .Where(student => student.Gender == genderGroup.Key && genderTargets.Any(target => CanNameMatch(student, target)))
                     .ToList();
-                if (genderGroup.Count() == 1 && genderSources.Count == 1)
+                if (genderTargets.Count == 1
+                    && genderSources.Count == 1
+                    && CanNameMatch(genderSources[0], genderTargets[0]))
                 {
-                    var target = genderGroup.First();
-                    matches.Add(new StudentMatch(genderSources[0], target));
-                    remainingSources.Remove(genderSources[0]);
-                    remainingTargets.Remove(target);
+                    matches.Add(new StudentMatch(genderSources[0], genderTargets[0]));
+                    usedSources.Add(genderSources[0]);
+                    usedTargets.Add(genderTargets[0]);
+                    leftoverSources.Remove(genderSources[0]);
+                    leftoverTargets.Remove(genderTargets[0]);
                 }
             }
 
-            foreach (var target in remainingTargets)
+            leftoverSources = leftoverSources.Where(student => !usedSources.Contains(student)).ToList();
+            leftoverTargets = leftoverTargets.Where(student => !usedTargets.Contains(student)).ToList();
+            if (leftoverSources.Count == 1
+                && leftoverTargets.Count == 1
+                && CanNameMatch(leftoverSources[0], leftoverTargets[0]))
             {
-                issues.Add(new ScoreIssue(
-                    "同名学生无法区分",
-                    target.Name,
-                    "学号和性别均不能唯一确定对应学生，未写入。"));
+                matches.Add(new StudentMatch(leftoverSources[0], leftoverTargets[0]));
+                usedSources.Add(leftoverSources[0]);
+                usedTargets.Add(leftoverTargets[0]);
+                leftoverSources.Clear();
+                leftoverTargets.Clear();
             }
 
-            foreach (var source in remainingSources)
+            if (leftoverSources.Count > 0 && leftoverTargets.Count > 0
+                && leftoverSources.Any(source => leftoverTargets.Any(target => CanNameMatch(source, target))))
             {
-                if (!targetNames.Contains(source.Name))
+                foreach (var target in leftoverTargets)
                 {
-                    issues.Add(new ScoreIssue("名单中没有该学生", source.Name, "该生的成绩未写入。"));
+                    issues.Add(new ScoreIssue(
+                        IssueCategories.DuplicateNameUnresolved,
+                        target.DisplayName,
+                        "学号和性别均不能唯一确定对应学生，未写入。",
+                        target.DisplayId));
+                    usedTargets.Add(target);
+                }
+
+                foreach (var source in leftoverSources)
+                {
+                    usedSources.Add(source);
                 }
             }
         }
 
-        foreach (var target in targetStudents.Where(target => !sourceGroups.Any(group => group.Key == target.Name)))
+        foreach (var source in sourceStudents.Where(student => !usedSources.Contains(student)))
         {
-            issues.Add(new ScoreIssue("成绩表中没有该学生", target.Name, "目标成绩保持原样。"));
+            issues.Add(new ScoreIssue(
+                IssueCategories.MissingInTarget,
+                source.DisplayName,
+                "未添加学生行，该生的成绩未写入。",
+                source.DisplayId));
+        }
+
+        foreach (var target in targetStudents.Where(student => !usedTargets.Contains(student)))
+        {
+            issues.Add(new ScoreIssue(
+                IssueCategories.MissingInSource,
+                target.DisplayName,
+                "目标成绩保持原样。",
+                target.DisplayId));
         }
 
         return matches;
+    }
+
+    private static bool CanNameMatch(StudentRow source, StudentRow target)
+    {
+        return !(source.HasId && target.HasId);
     }
 
     private static ProcessResult SaveValidatedWorkbook(
@@ -547,10 +707,14 @@ public sealed class ExcelProcessor
         int matchedStudentCount,
         int blankScoreCount,
         IReadOnlyList<ScoreIssue> issues,
-        bool createBackup)
+        bool createBackup,
+        string sourceFileName,
+        string targetFileName)
     {
         var directory = Path.GetDirectoryName(targetPath)
             ?? throw new ExcelProcessingException("无法确定名单文件所在目录。");
+        var originalExtension = Path.GetExtension(targetPath);
+        var isXlsx = originalExtension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase);
         var tempPath = Path.Combine(directory, $".score-tool-{Guid.NewGuid():N}.xlsx");
         string? backupPath = null;
 
@@ -566,8 +730,26 @@ public sealed class ExcelProcessor
                 var fileName = Path.GetFileNameWithoutExtension(targetPath);
                 backupPath = Path.Combine(
                     backupDirectory,
-                    $"{fileName}-{DateTime.Now:yyyyMMdd-HHmmss-fff}.xlsx");
+                    $"{fileName}-{DateTime.Now:yyyyMMdd-HHmmss-fff}{originalExtension}");
                 File.Copy(targetPath, backupPath);
+            }
+
+            if (!isXlsx)
+            {
+                var outputPath = CreateSiblingXlsxPath(targetPath);
+                File.Move(tempPath, outputPath);
+                var note = $"原名单是 {originalExtension.ToLowerInvariant()}，为避免改坏原文件，结果已另存为「{Path.GetFileName(outputPath)}」。原文件未改动。";
+                return new ProcessResult(
+                    outputPath,
+                    backupPath,
+                    true,
+                    matchedStudentCount,
+                    writes.Count,
+                    blankScoreCount,
+                    issues,
+                    note,
+                    sourceFileName,
+                    targetFileName);
             }
 
             try
@@ -580,15 +762,18 @@ public sealed class ExcelProcessor
                     matchedStudentCount,
                     writes.Count,
                     blankScoreCount,
-                    issues);
+                    issues,
+                    null,
+                    sourceFileName,
+                    targetFileName);
             }
             catch (IOException)
             {
-                return SaveCopyInstead(tempPath, targetPath, backupPath, matchedStudentCount, writes.Count, blankScoreCount, issues);
+                return SaveCopyInstead(tempPath, targetPath, backupPath, matchedStudentCount, writes.Count, blankScoreCount, issues, sourceFileName, targetFileName);
             }
             catch (UnauthorizedAccessException)
             {
-                return SaveCopyInstead(tempPath, targetPath, backupPath, matchedStudentCount, writes.Count, blankScoreCount, issues);
+                return SaveCopyInstead(tempPath, targetPath, backupPath, matchedStudentCount, writes.Count, blankScoreCount, issues, sourceFileName, targetFileName);
             }
         }
         finally
@@ -600,6 +785,19 @@ public sealed class ExcelProcessor
         }
     }
 
+    private static string CreateSiblingXlsxPath(string targetPath)
+    {
+        var directory = Path.GetDirectoryName(targetPath)!;
+        var name = Path.GetFileNameWithoutExtension(targetPath);
+        var copyPath = Path.Combine(directory, $"{name}-已填写.xlsx");
+        if (File.Exists(copyPath))
+        {
+            copyPath = Path.Combine(directory, $"{name}-已填写-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx");
+        }
+
+        return copyPath;
+    }
+
     private static ProcessResult SaveCopyInstead(
         string tempPath,
         string targetPath,
@@ -607,18 +805,20 @@ public sealed class ExcelProcessor
         int matchedStudentCount,
         int writtenScoreCount,
         int blankScoreCount,
-        IReadOnlyList<ScoreIssue> issues)
+        IReadOnlyList<ScoreIssue> issues,
+        string sourceFileName,
+        string targetFileName)
     {
         var directory = Path.GetDirectoryName(targetPath)!;
         var name = Path.GetFileNameWithoutExtension(targetPath);
-        var extension = Path.GetExtension(targetPath);
-        var copyPath = Path.Combine(directory, $"{name}-已填写{extension}");
+        var copyPath = Path.Combine(directory, $"{name}-已填写.xlsx");
         if (File.Exists(copyPath))
         {
-            copyPath = Path.Combine(directory, $"{name}-已填写-{DateTime.Now:yyyyMMdd-HHmmss}{extension}");
+            copyPath = Path.Combine(directory, $"{name}-已填写-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx");
         }
 
         File.Move(tempPath, copyPath);
+        var note = $"原文件正被占用，结果已保存为「{Path.GetFileName(copyPath)}」。原名单未改动。";
         return new ProcessResult(
             copyPath,
             backupPath,
@@ -626,7 +826,10 @@ public sealed class ExcelProcessor
             matchedStudentCount,
             writtenScoreCount,
             blankScoreCount,
-            issues);
+            issues,
+            note,
+            sourceFileName,
+            targetFileName);
     }
 
     private static void ValidateSavedWorkbook(
@@ -635,7 +838,7 @@ public sealed class ExcelProcessor
         IReadOnlyList<WritePlan> writes)
     {
         using var workbook = OpenWorkbook(path);
-        var sheet = workbook.Worksheets.First(sheet => sheet.Name == sheetName);
+        var sheet = workbook.Worksheets.First(item => item.Name == sheetName);
         foreach (var write in writes)
         {
             var actual = sheet.Cell(write.Row, write.Column).Value;
@@ -652,6 +855,102 @@ public sealed class ExcelProcessor
         return cell.HasFormula ? cell.CachedValue : cell.Value;
     }
 
+    private static bool IsEffectivelyEmpty(IXLCell cell)
+    {
+        if (cell.IsEmpty())
+        {
+            return true;
+        }
+
+        return string.IsNullOrWhiteSpace(cell.GetFormattedString());
+    }
+
+    private static bool ScoresEqual(XLCellValue left, XLCellValue right)
+    {
+        if (TryGetNumber(left, out var leftNumber) && TryGetNumber(right, out var rightNumber))
+        {
+            return Math.Abs(leftNumber - rightNumber) < 0.000000001;
+        }
+
+        return string.Equals(FormatScore(left), FormatScore(right), StringComparison.Ordinal);
+    }
+
+    private static bool TryGetNumber(XLCellValue value, out double number)
+    {
+        if (value.IsNumber)
+        {
+            number = value.GetNumber();
+            return true;
+        }
+
+        if (value.IsText)
+        {
+            return TextNormalization.TryParseScoreNumber(value.GetText(), out number);
+        }
+
+        number = 0;
+        return false;
+    }
+
+    private static string FormatScore(XLCellValue value, IXLCell? cell = null)
+    {
+        if (value.IsBlank || (cell is not null && IsEffectivelyEmpty(cell)))
+        {
+            return "空";
+        }
+
+        if (value.IsNumber)
+        {
+            var number = value.GetNumber();
+            if (Math.Abs(number - Math.Round(number)) < 0.000000001)
+            {
+                return Math.Round(number).ToString("0", CultureInfo.InvariantCulture);
+            }
+
+            return number.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var text = cell is null ? value.ToString() : cell.GetFormattedString();
+        text = TextNormalization.DisplayText(text);
+        return text.Length == 0 ? "空" : text;
+    }
+
+    private static ScoreIssue? TryCreateOutOfRangeIssue(StudentMatch match, string columnTitle, XLCellValue incoming)
+    {
+        if (!TryGetNumber(incoming, out var number) || !TextNormalization.IsNumericScoreOutOfRange(number))
+        {
+            return null;
+        }
+
+        var display = FormatScore(incoming);
+        return new ScoreIssue(
+            IssueCategories.OutOfRange,
+            match.Target.DisplayName,
+            $"「{columnTitle}」成绩 {display}，超出 0～150，已按成绩表写入。",
+            GetDisplayId(match),
+            "成绩",
+            display,
+            "正常范围",
+            "0～150");
+    }
+
+    private static string GetDisplayId(StudentMatch match) => PreferDisplayId(match.Source, match.Target);
+
+    private static string PreferDisplayId(StudentRow first, StudentRow second)
+    {
+        if (first.DisplayId.Length >= second.DisplayId.Length && first.DisplayId.Length > 0)
+        {
+            return first.DisplayId;
+        }
+
+        if (second.DisplayId.Length > 0)
+        {
+            return second.DisplayId;
+        }
+
+        return first.NormalizedId.Length > 0 ? first.NormalizedId : second.NormalizedId;
+    }
+
     private static List<string> GetHeaderParts(IXLWorksheet sheet, int firstRow, int lastRow, int column)
     {
         var result = new List<string>();
@@ -663,6 +962,7 @@ public sealed class ExcelProcessor
                 result.Add(text);
             }
         }
+
         return result;
     }
 
@@ -673,6 +973,7 @@ public sealed class ExcelProcessor
         {
             return text;
         }
+
         return NormalizeText(cell.MergedRange().FirstCell().GetFormattedString());
     }
 
@@ -726,17 +1027,7 @@ public sealed class ExcelProcessor
 
     private static string NormalizeText(string? value)
     {
-        return Regex.Replace(value?.Replace('\u00A0', ' ').Trim() ?? string.Empty, @"\s+", " ");
-    }
-
-    private static string NormalizeName(string value)
-    {
-        return NormalizeText(value).Replace(" ", string.Empty);
-    }
-
-    private static string NormalizeIdentifier(string value)
-    {
-        return NormalizeText(value).Replace(" ", string.Empty).ToUpperInvariant();
+        return Regex.Replace(TextNormalization.ToHalfWidth(value).Replace('\u00A0', ' ').Trim(), @"\s+", " ");
     }
 
     private static string NormalizeGender(string value)
@@ -750,11 +1041,6 @@ public sealed class ExcelProcessor
         };
     }
 
-    private static bool HasIdentifierConflict(StudentRow source, StudentRow target)
-    {
-        return source.Id.Length > 0 && target.Id.Length > 0 && source.Id != target.Id;
-    }
-
     private static void ValidatePath(string path)
     {
         if (!File.Exists(path))
@@ -762,17 +1048,28 @@ public sealed class ExcelProcessor
             throw new ExcelProcessingException($"文件不存在：{path}");
         }
 
-        if (!string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase))
+        if (!SpreadsheetLoader.IsSupportedPath(path))
         {
-            throw new ExcelProcessingException("目前只支持 .xlsx 文件。");
+            throw new ExcelProcessingException("目前支持 .xlsx、.xls 和 .csv 文件。");
         }
     }
 
-    private sealed record StudentRow(int Row, string Name, string Id, string Gender);
+    private sealed record StudentRow(
+        int Row,
+        string DisplayName,
+        string NormalizedName,
+        string DisplayId,
+        string NormalizedId,
+        string Gender)
+    {
+        public bool HasId => NormalizedId.Length > 0;
+    }
+
     private sealed record ScoreColumn(int Column, string Group, string FullHeader);
     private sealed record ScoreMapping(ScoreColumn Source, ScoreColumn Target);
     private sealed record StudentMatch(StudentRow Source, StudentRow Target);
     private sealed record WritePlan(int Row, int Column, XLCellValue Value);
+    private sealed record PendingOverwrite(OverwriteCandidate Candidate, WritePlan Write, ScoreIssue? OutOfRangeIssue);
 
     private sealed record SheetLayout(
         int HeaderRow,

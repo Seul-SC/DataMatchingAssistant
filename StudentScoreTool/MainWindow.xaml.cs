@@ -22,6 +22,9 @@ public partial class MainWindow : Window
     private string? _sourcePath;
     private string? _targetPath;
     private string? _lastOutputPath;
+    private ProcessResult? _lastResult;
+    private string? _lastIssueIntro;
+    private Uri? _lastIssueSticker;
     private UpdateCheckResult? _pendingUpdate;
 
     public MainWindow()
@@ -183,8 +186,8 @@ public partial class MainWindow : Window
         var currentPath = role == SheetRole.Source ? _sourcePath : _targetPath;
         var dialog = new OpenFileDialog
         {
-            Title = role == SheetRole.Source ? "选择有成绩的 Excel" : "选择需要填写成绩的名单 Excel",
-            Filter = "Excel 工作簿 (*.xlsx)|*.xlsx",
+            Title = role == SheetRole.Source ? "选择有成绩的表格" : "选择需要填写成绩的名单",
+            Filter = SpreadsheetLoader.OpenFileFilter,
             CheckFileExists = true,
             Multiselect = false
         };
@@ -222,7 +225,7 @@ public partial class MainWindow : Window
 
     private void HandleDragEnter(SheetRole role, DragEventArgs e)
     {
-        if (_isBusy || GetDroppedXlsxPath(e) is null)
+        if (_isBusy || GetDroppedTablePath(e) is null)
         {
             e.Effects = DragDropEffects.None;
             e.Handled = true;
@@ -246,7 +249,7 @@ public partial class MainWindow : Window
 
     private void HandleDragOver(DragEventArgs e)
     {
-        e.Effects = !_isBusy && GetDroppedXlsxPath(e) is not null
+        e.Effects = !_isBusy && GetDroppedTablePath(e) is not null
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
@@ -295,14 +298,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var path = GetDroppedXlsxPath(e);
+        var path = GetDroppedTablePath(e);
         if (path is not null)
         {
             TryApplyFile(role, path);
         }
     }
 
-    private static string? GetDroppedXlsxPath(DragEventArgs e)
+    private static string? GetDroppedTablePath(DragEventArgs e)
     {
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)
             || e.Data.GetData(DataFormats.FileDrop) is not string[] files
@@ -312,7 +315,7 @@ public partial class MainWindow : Window
         }
 
         var path = files[0];
-        return File.Exists(path) && path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+        return File.Exists(path) && SpreadsheetLoader.IsSupportedPath(path)
             ? path
             : null;
     }
@@ -438,6 +441,7 @@ public partial class MainWindow : Window
 
         SetBusy(true);
         OpenOutputFolderButton.Visibility = Visibility.Collapsed;
+        ClearLastIssues();
         try
         {
             var request = new ProcessRequest(
@@ -449,36 +453,24 @@ public partial class MainWindow : Window
             var result = await _processor.ProcessAsync(
                 request,
                 BackupCheckBox.IsChecked == true,
-                ConfirmIssues,
+                ConfirmOverwrites,
                 progress);
 
             _lastOutputPath = result.OutputPath;
+            _lastResult = result;
             OpenOutputFolderButton.Visibility = Visibility.Visible;
-            StatusTextBlock.Text = result.UsedCopy
-                ? $"原文件被占用，已保存副本：{Path.GetFileName(result.OutputPath)}"
-                : "处理完成。";
+            StatusTextBlock.Text = BuildStatusText(result);
+            RefreshIssuesButton();
+            SetBusy(false);
 
-            if (result.UsedCopy)
+            if (result.HasIssues)
             {
-                MessageBox.Show(this,
-                    $"原文件正被占用，结果已保存为：\n{result.OutputPath}",
-                    "处理完成", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            else if (result.WrittenScoreCount == 0)
-            {
-                MessageBox.Show(this, "没有可写入的成绩，名单文件未修改。",
-                    "处理结束", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            else if (result.Issues.Count > 0)
-            {
-                MessageBox.Show(this,
-                    $"处理完成，已写入 {result.WrittenScoreCount} 项成绩，跳过 {result.Issues.Count} 项异常。",
-                    "处理完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowIssuesWindow();
             }
             else
             {
-                MessageBox.Show(this, "处理完成。", "数据匹配助手",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                var success = new SuccessWindow(result) { Owner = this };
+                success.ShowDialog();
             }
         }
         catch (OperationCanceledException)
@@ -532,13 +524,72 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> ConfirmIssues(IReadOnlyList<ScoreIssue> issues)
+    private async Task<IReadOnlyList<string>> ConfirmOverwrites(IReadOnlyList<OverwriteCandidate> candidates)
     {
         return await Dispatcher.InvokeAsync(() =>
         {
-            var dialog = new IssuesWindow(issues) { Owner = this };
-            return dialog.ShowDialog() == true;
+            var dialog = new OverwriteWindow(candidates) { Owner = this };
+            return dialog.ShowDialog() == true
+                ? dialog.SelectedKeys
+                : Array.Empty<string>();
         });
+    }
+
+    private void ViewIssues_Click(object sender, RoutedEventArgs e) => ShowIssuesWindow();
+
+    private void ShowIssuesWindow()
+    {
+        if (_lastResult is null || !_lastResult.HasIssues)
+        {
+            return;
+        }
+
+        _lastIssueIntro ??= ResultMessages.PickIssueIntro();
+        _lastIssueSticker ??= StickerCatalog.PickSad();
+        var dialog = new IssuesWindow(_lastResult, _lastIssueIntro, _lastIssueSticker) { Owner = this };
+        dialog.ShowDialog();
+    }
+
+    private void ClearLastIssues()
+    {
+        _lastResult = null;
+        _lastIssueIntro = null;
+        _lastIssueSticker = null;
+        RefreshIssuesButton();
+    }
+
+    private void RefreshIssuesButton()
+    {
+        var count = _lastResult?.Issues.Count ?? 0;
+        if (count > 0)
+        {
+            ViewIssuesButton.Content = $"查看刚才的问题（{count} 项）";
+            ViewIssuesButton.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ViewIssuesButton.Content = "查看刚才的问题";
+            ViewIssuesButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private static string BuildStatusText(ProcessResult result)
+    {
+        if (!string.IsNullOrWhiteSpace(result.OutputNote))
+        {
+            return result.OutputNote;
+        }
+
+        if (result.WrittenScoreCount == 0)
+        {
+            return result.HasIssues
+                ? "处理结束。没有写入新成绩，问题已列出。"
+                : "处理结束，没有可写入的成绩。";
+        }
+
+        return result.HasIssues
+            ? $"处理完成，已写入 {result.WrittenScoreCount} 项成绩，另有 {result.Issues.Count} 处需要留意。"
+            : "处理完成。";
     }
 
     private void SetBusy(bool isBusy)

@@ -31,7 +31,7 @@
                                        VerticalAlignment="Center" FontSize="13"
                                        Foreground="{DynamicResource TextMutedBrush}"/>
                         </StackPanel>
-                        <TextBlock Text="选择两个 Excel 文件，自动把学生成绩填入名单表。"
+                        <TextBlock Text="选择成绩表和名单表，自动把成绩填入已有列。支持 Excel 和 CSV。"
                                    Margin="0,2,0,0" FontSize="12"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
@@ -112,7 +112,7 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="1  有成绩的 Excel"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="1  有成绩的表格"
                                    FontSize="15" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryBrush}"/>
                         <Button x:Name="SourceBrowseButton" Grid.Row="0" Grid.Column="1"
@@ -121,7 +121,7 @@
 
                         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,14,0,0">
                             <TextBlock x:Name="SourcePlaceholderText"
-                                       Text="将 .xlsx 文件拖到这里，或点击右上角选择文件"
+                                       Text="将 .xlsx、.xls 或 .csv 文件拖到这里，或点击右上角选择文件"
                                        FontSize="13" Foreground="{DynamicResource TextMutedBrush}"/>
                             <TextBlock x:Name="SourceFileNameText" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimaryBrush}"
@@ -159,7 +159,7 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="2  需要填写成绩的名单 Excel"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="2  需要填写成绩的名单"
                                    FontSize="15" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryBrush}"/>
                         <Button x:Name="TargetBrowseButton" Grid.Row="0" Grid.Column="1"
@@ -168,7 +168,7 @@
 
                         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,14,0,0">
                             <TextBlock x:Name="TargetPlaceholderText"
-                                       Text="将 .xlsx 文件拖到这里，或点击右上角选择文件"
+                                       Text="将 .xlsx、.xls 或 .csv 文件拖到这里，或点击右上角选择文件"
                                        FontSize="13" Foreground="{DynamicResource TextMutedBrush}"/>
                             <TextBlock x:Name="TargetFileNameText" FontSize="16" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimaryBrush}"
@@ -192,8 +192,8 @@
                 <StackPanel Margin="4,2,4,0">
                     <CheckBox x:Name="BackupCheckBox" IsChecked="True"
                               Content="处理前自动备份名单原文件（推荐）"/>
-                    <TextBlock Text="只写入已有成绩列；公式单元格和来源空白成绩不会被覆盖。"
-                               Margin="22,6,0,0" FontSize="12"
+                    <TextBlock Text="只写入已有成绩列；公式单元格和来源空白成绩不会被覆盖。名单若是 .xls 或 .csv，会另存为 .xlsx，不改动原文件。"
+                               Margin="22,6,0,0" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextMutedBrush}"/>
                 </StackPanel>
 
@@ -207,9 +207,14 @@
                                TextAlignment="Center" FontSize="13"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Button x:Name="ViewIssuesButton" Style="{StaticResource AttentionButton}"
+                            Content="查看刚才的问题"
+                            Margin="0,14,0,0"
+                            Visibility="Collapsed"
+                            Click="ViewIssues_Click"/>
                     <Button x:Name="OpenOutputFolderButton" Style="{StaticResource LinkButton}"
                             Content="打开所在文件夹"
-                            Margin="0,8,0,0"
+                            Margin="0,10,0,0"
                             HorizontalAlignment="Center"
                             Visibility="Collapsed"
                             Click="OpenOutputFolder_Click"/>

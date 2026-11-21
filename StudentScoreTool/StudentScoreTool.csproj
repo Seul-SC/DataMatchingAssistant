@@ -19,8 +19,12 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="ExcelDataReader" Version="3.7.0" />
+    <PackageReference Include="ExcelDataReader.DataSet" Version="3.7.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
     <PackageReference Include="Velopack" Version="1.2.161" />
     <Resource Include="Assets\app.png" />
+    <Resource Include="Assets\stickers\*.png" />
     <Resource Include="Assets\tips-wechat.png" Condition="Exists('Assets\tips-wechat.png')" />
     <Resource Include="Assets\tips-alipay.png" Condition="Exists('Assets\tips-alipay.png')" />
   </ItemGroup>

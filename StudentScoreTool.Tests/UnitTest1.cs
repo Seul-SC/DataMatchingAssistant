@@ -40,7 +40,8 @@ public sealed class ExcelProcessorTests : IDisposable
         Assert.Equal(3, result.MatchedStudentCount);
         Assert.Equal(7, result.WrittenScoreCount);
         Assert.Equal(2, result.BlankScoreCount);
-        Assert.Empty(result.Issues);
+        Assert.Equal(2, result.Issues.Count);
+        Assert.All(result.Issues, issue => Assert.Equal(IssueCategories.BlankSource, issue.Category));
         Assert.False(result.UsedCopy);
         Assert.NotNull(result.BackupPath);
         Assert.True(File.Exists(result.BackupPath));
@@ -84,14 +85,7 @@ public sealed class ExcelProcessorTests : IDisposable
             book.SaveAs(targetPath);
         }
 
-        var confirmed = false;
-        var result = await Process(sourcePath, targetPath, "成绩", "名单", false, issues =>
-        {
-            confirmed = true;
-            Assert.Single(issues);
-            Assert.Equal("学号冲突", issues[0].Category);
-            return Task.FromResult(true);
-        });
+        var result = await Process(sourcePath, targetPath, "成绩", "名单", false);
 
         using var resultBook = new XLWorkbook(targetPath);
         var resultSheet = resultBook.Worksheet("名单");
@@ -100,8 +94,10 @@ public sealed class ExcelProcessorTests : IDisposable
         Assert.Equal(60, resultSheet.Cell("D4").GetDouble());
         Assert.Equal(70, resultSheet.Cell("D5").GetDouble());
         Assert.Equal(55, resultSheet.Cell("D6").GetDouble());
-        Assert.True(confirmed);
         Assert.Equal(4, result.WrittenScoreCount);
+        Assert.Contains(result.Issues, issue => issue.Category == IssueCategories.MissingInTarget && issue.StudentName == "王五");
+        Assert.Contains(result.Issues, issue => issue.Category == IssueCategories.MissingInSource && issue.StudentName == "王五");
+        Assert.DoesNotContain(result.Issues, issue => issue.Category == "学号冲突");
     }
 
     [Fact]
@@ -128,8 +124,8 @@ public sealed class ExcelProcessorTests : IDisposable
         Assert.True(sheet.Cell("D1").IsEmpty());
         Assert.Equal(1, result.WrittenScoreCount);
         Assert.Equal(2, result.Issues.Count);
-        Assert.Contains(result.Issues, issue => issue.Category == "成绩列未写入");
-        Assert.Contains(result.Issues, issue => issue.Category == "公式未覆盖");
+        Assert.Contains(result.Issues, issue => issue.Category == IssueCategories.ColumnUnmapped);
+        Assert.Contains(result.Issues, issue => issue.Category == IssueCategories.FormulaSkipped);
     }
 
     [Fact]
@@ -162,6 +158,8 @@ public sealed class ExcelProcessorTests : IDisposable
         Assert.Equal(20, sheet.Cell("B5").GetDouble());
         Assert.Equal(3, result.WrittenScoreCount);
         Assert.Equal(1, result.BlankScoreCount);
+        Assert.Contains(result.Issues, issue =>
+            issue.Category == IssueCategories.BlankSource && issue.StudentName == "丁");
     }
 
     [Fact]
@@ -180,7 +178,7 @@ public sealed class ExcelProcessorTests : IDisposable
     }
 
     [Fact]
-    public async Task CancelingIssuesLeavesTargetUntouchedAndCreatesNoBackup()
+    public async Task SkippingOverwritesLeavesTargetUntouchedAndCreatesNoBackup()
     {
         var sourcePath = Path.Combine(_directory, "取消来源.xlsx");
         var targetPath = Path.Combine(_directory, "取消名单.xlsx");
@@ -190,14 +188,21 @@ public sealed class ExcelProcessorTests : IDisposable
         });
         CreateSimpleWorkbook(targetPath, "名单", ["姓名", "学号", "成绩"], sheet =>
         {
-            AddRow(sheet, 2, "张三", "002", 10);
+            AddRow(sheet, 2, "张三", "001", 10);
         });
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            Process(sourcePath, targetPath, "来源", "名单", true, _ => Task.FromResult(false)));
+        var result = await Process(
+            sourcePath,
+            targetPath,
+            "来源",
+            "名单",
+            true,
+            _ => Task.FromResult<IReadOnlyList<string>>([]));
 
         using var book = new XLWorkbook(targetPath);
         Assert.Equal(10, book.Worksheet("名单").Cell("C2").GetDouble());
+        Assert.Equal(0, result.WrittenScoreCount);
+        Assert.Contains(result.Issues, issue => issue.Category == IssueCategories.OverwriteSkipped);
         Assert.False(Directory.Exists(Path.Combine(_directory, "备份")));
     }
 
@@ -230,13 +235,14 @@ public sealed class ExcelProcessorTests : IDisposable
         string sourceSheet,
         string targetSheet,
         bool backup,
-        Func<IReadOnlyList<ScoreIssue>, Task<bool>>? confirm = null)
+        Func<IReadOnlyList<OverwriteCandidate>, Task<IReadOnlyList<string>>>? confirm = null)
     {
         var processor = new ExcelProcessor();
         return processor.ProcessAsync(
             new ProcessRequest(sourcePath, targetPath, sourceSheet, targetSheet),
             backup,
-            confirm ?? (_ => Task.FromResult(true)));
+            confirm ?? (candidates => Task.FromResult<IReadOnlyList<string>>(
+                candidates.Select(item => item.Key).ToList())));
     }
 
     private static void CreateAssignmentSource(string path)

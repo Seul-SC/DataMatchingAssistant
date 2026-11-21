@@ -80,6 +80,22 @@ public sealed class ThemePaletteTests
             $"{theme} 选中高亮上的文字对比度不足。");
     }
 
+    [Theory]
+    [InlineData(AppTheme.Light)]
+    [InlineData(AppTheme.Dark)]
+    [InlineData(AppTheme.MintLight)]
+    [InlineData(AppTheme.MintDeep)]
+    public void AttentionButtonsMeetContrast(AppTheme theme)
+    {
+        var palette = ThemePalette.For(theme);
+        Assert.True(
+            ColorContrast.Ratio(palette.AttentionForeground, palette.Attention) >= 4.5,
+            $"{theme} 问题按钮对比度不足。");
+        Assert.True(
+            ColorContrast.Ratio(palette.AttentionForeground, palette.AttentionHover) >= 4.5,
+            $"{theme} 问题按钮悬停态对比度不足。");
+    }
+
     [Fact]
     public void ColorContrastMatchesKnownValue()
     {

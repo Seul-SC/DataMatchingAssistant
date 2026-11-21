@@ -32,6 +32,9 @@ public static class ThemeManager
         SetBrush(resources, "AccentSoftBrush", palette.AccentSoft);
         SetBrush(resources, "DangerBrush", palette.Danger);
         SetBrush(resources, "SuccessBrush", palette.Success);
+        SetBrush(resources, "AttentionBrush", palette.Attention);
+        SetBrush(resources, "AttentionHoverBrush", palette.AttentionHover);
+        SetBrush(resources, "AttentionForegroundBrush", palette.AttentionForeground);
         Current = theme;
     }
 
