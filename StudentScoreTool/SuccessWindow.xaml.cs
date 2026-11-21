@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace StudentScoreTool;
@@ -10,7 +12,7 @@ public partial class SuccessWindow : Window
     {
         InitializeComponent();
         MessageTextBlock.Text = ResultMessages.PickSuccess();
-        ApplySticker(StickerCatalog.PickHappy());
+        ApplyStickers(StickerCatalog.PickHappy());
         SummaryTextBlock.Text = BuildSummary(result);
         if (!string.IsNullOrWhiteSpace(result.OutputNote))
         {
@@ -19,15 +21,34 @@ public partial class SuccessWindow : Window
         }
     }
 
-    private void ApplySticker(Uri? uri)
+    private void ApplyStickers(IReadOnlyList<Uri> uris)
     {
-        if (uri is null)
+        FillStickerPanel(StickerPanel, uris, 120);
+    }
+
+    internal static void FillStickerPanel(StackPanel panel, IReadOnlyList<Uri> uris, double size)
+    {
+        panel.Children.Clear();
+        if (uris.Count == 0)
         {
-            StickerBorder.Visibility = Visibility.Collapsed;
+            panel.Visibility = Visibility.Collapsed;
             return;
         }
 
-        StickerImage.Source = LoadSticker(uri);
+        panel.Visibility = Visibility.Visible;
+        foreach (var uri in uris)
+        {
+            var image = new Image
+            {
+                Source = LoadSticker(uri),
+                Width = size,
+                Height = size,
+                Margin = new Thickness(0, 0, 12, 0),
+                Stretch = Stretch.Uniform
+            };
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+            panel.Children.Add(image);
+        }
     }
 
     private static string BuildSummary(ProcessResult result)

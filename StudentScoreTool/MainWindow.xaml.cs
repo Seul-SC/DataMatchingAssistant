@@ -24,7 +24,7 @@ public partial class MainWindow : Window
     private string? _lastOutputPath;
     private ProcessResult? _lastResult;
     private string? _lastIssueIntro;
-    private Uri? _lastIssueSticker;
+    private IReadOnlyList<Uri> _lastIssueStickers = [];
     private UpdateCheckResult? _pendingUpdate;
 
     public MainWindow()
@@ -545,8 +545,12 @@ public partial class MainWindow : Window
         }
 
         _lastIssueIntro ??= ResultMessages.PickIssueIntro();
-        _lastIssueSticker ??= StickerCatalog.PickSad();
-        var dialog = new IssuesWindow(_lastResult, _lastIssueIntro, _lastIssueSticker) { Owner = this };
+        if (_lastIssueStickers.Count == 0)
+        {
+            _lastIssueStickers = StickerCatalog.PickSad();
+        }
+
+        var dialog = new IssuesWindow(_lastResult, _lastIssueIntro, _lastIssueStickers) { Owner = this };
         dialog.ShowDialog();
     }
 
@@ -554,7 +558,7 @@ public partial class MainWindow : Window
     {
         _lastResult = null;
         _lastIssueIntro = null;
-        _lastIssueSticker = null;
+        _lastIssueStickers = [];
         RefreshIssuesButton();
     }
 

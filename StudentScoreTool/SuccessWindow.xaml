@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="处理完成"
-        Width="560"
-        MinWidth="480"
+        Width="600"
+        MinWidth="520"
         SizeToContent="Height"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
@@ -11,23 +11,13 @@
         Icon="/Assets/app.png"
         Background="{DynamicResource WindowBackgroundBrush}">
     <StackPanel Margin="28,24,28,24">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Border x:Name="StickerBorder" Width="148" Height="148" Background="Transparent" BorderThickness="0">
-                <Image x:Name="StickerImage" Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality"/>
-            </Border>
-            <StackPanel Grid.Column="1" Margin="20,4,0,0" VerticalAlignment="Center">
-                <TextBlock Text="处理完成" FontSize="22" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <TextBlock x:Name="MessageTextBlock" Margin="0,10,0,0" FontSize="16"
-                           TextWrapping="Wrap" LineHeight="24"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
-            </StackPanel>
-        </Grid>
+        <StackPanel x:Name="StickerPanel" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+        <TextBlock Text="处理完成" FontSize="22" FontWeight="SemiBold"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+        <TextBlock x:Name="MessageTextBlock" Margin="0,10,0,0" FontSize="16"
+                   TextWrapping="Wrap" LineHeight="24" TextAlignment="Center"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
 
         <Border Margin="0,22,0,0" Padding="16,14"
                 Background="{DynamicResource CardBackgroundBrush}"

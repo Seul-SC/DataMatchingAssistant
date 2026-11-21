@@ -1,26 +1,17 @@
 using System.Windows;
-using System.Windows.Media.Imaging;
 
 namespace StudentScoreTool;
 
 public partial class IssuesWindow : Window
 {
-    public IssuesWindow(ProcessResult result, string intro, Uri? sticker)
+    public IssuesWindow(ProcessResult result, string intro, IReadOnlyList<Uri> stickers)
     {
         InitializeComponent();
         Title = $"需要留意的问题（{result.Issues.Count} 项）";
         TitleTextBlock.Text = $"一共 {result.Issues.Count} 处需要留意";
         IntroTextBlock.Text = intro;
         FilesTextBlock.Text = BuildFilesSummary(result);
-        if (sticker is null)
-        {
-            StickerBorder.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            StickerImage.Source = LoadSticker(sticker);
-        }
-
+        SuccessWindow.FillStickerPanel(StickerPanel, stickers, 108);
         GroupItemsControl.ItemsSource = BuildGroups(result.Issues);
     }
 
@@ -42,7 +33,6 @@ public partial class IssuesWindow : Window
         return summary;
     }
 
-    private static BitmapImage LoadSticker(Uri uri) => SuccessWindow.LoadSticker(uri);
 
     private static List<IssueGroupView> BuildGroups(IReadOnlyList<ScoreIssue> issues)
     {

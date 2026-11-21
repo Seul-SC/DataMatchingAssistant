@@ -59,18 +59,27 @@ public static class StickerCatalog
         "/Assets/stickers/sad-22.png"
     ];
 
-    public static Uri? PickHappy() => Pick(Happy);
+    public static IReadOnlyList<Uri> PickHappy() => PickMany(Happy);
 
-    public static Uri? PickSad() => Pick(Sad);
+    public static IReadOnlyList<Uri> PickSad() => PickMany(Sad);
 
-    private static Uri? Pick(IReadOnlyList<string> paths)
+    private static IReadOnlyList<Uri> PickMany(IReadOnlyList<string> paths, int minCount = 2, int maxCount = 3)
     {
         if (paths.Count == 0)
         {
-            return null;
+            return [];
         }
 
-        var path = paths[Random.Shared.Next(paths.Count)];
+        var count = Math.Min(paths.Count, Random.Shared.Next(minCount, maxCount + 1));
+        return paths
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(count)
+            .Select(ToPackUri)
+            .ToList();
+    }
+
+    private static Uri ToPackUri(string path)
+    {
         var relative = path.StartsWith('/') ? path : "/" + path;
         return new Uri("pack://application:,,," + relative, UriKind.Absolute);
     }
