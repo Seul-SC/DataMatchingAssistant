@@ -28,7 +28,7 @@
                    Foreground="{DynamicResource TextSecondaryBrush}">
             <Run Text="GitHub："/>
             <Hyperlink NavigateUri="https://github.com/Seul-SC/DataMatchingAssistant"
-                       RequestNavigate="GitHubLink_RequestNavigate">
+                       RequestNavigate="ExternalLink_RequestNavigate">
                 https://github.com/Seul-SC/DataMatchingAssistant
             </Hyperlink>
         </TextBlock>
@@ -38,46 +38,23 @@
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1" CornerRadius="12">
             <StackPanel>
-                <TextBlock Text="赞赏作者" FontSize="16" FontWeight="SemiBold"
+                <TextBlock Text="问题或建议" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <TextBlock Margin="0,6,0,0" FontSize="13" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"
-                           Text="请作者喝杯咖啡。支持作者完全自愿，不赞赏也可以使用全部功能。"/>
-                <Grid Margin="0,16,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <Border Style="{StaticResource QrPlaceholderBorder}">
-                            <Grid>
-                                <Image x:Name="WeChatQrImage" Stretch="Uniform" Margin="10" Visibility="Collapsed"/>
-                                <TextBlock x:Name="WeChatQrPlaceholder"
-                                           Text="微信赞赏码&#x0a;（待添加）"
-                                           TextAlignment="Center" VerticalAlignment="Center"
-                                           FontSize="13"
-                                           Foreground="{DynamicResource TextMutedBrush}"/>
-                            </Grid>
-                        </Border>
-                        <TextBlock Text="微信" HorizontalAlignment="Center" Margin="0,8,0,0"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <Border Style="{StaticResource QrPlaceholderBorder}">
-                            <Grid>
-                                <Image x:Name="AlipayQrImage" Stretch="Uniform" Margin="10" Visibility="Collapsed"/>
-                                <TextBlock x:Name="AlipayQrPlaceholder"
-                                           Text="支付宝赞赏码&#x0a;（待添加）"
-                                           TextAlignment="Center" VerticalAlignment="Center"
-                                           FontSize="13"
-                                           Foreground="{DynamicResource TextMutedBrush}"/>
-                            </Grid>
-                        </Border>
-                        <TextBlock Text="支付宝" HorizontalAlignment="Center" Margin="0,8,0,0"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </StackPanel>
-                </Grid>
+                           Text="有问题或建议，可以直接发邮件给我，或在 GitHub 上留言。"/>
+                <TextBlock Margin="0,14,0,0" FontSize="13" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}">
+                    <Run Text="邮箱："/>
+                    <Hyperlink NavigateUri="mailto:1753534364@qq.com"
+                               RequestNavigate="ExternalLink_RequestNavigate">
+                        1753534364@qq.com
+                    </Hyperlink>
+                </TextBlock>
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <Button Content="发送邮件" MinWidth="120" Padding="14,8" Click="Email_Click"/>
+                    <Button Content="在 GitHub 上留言" MinWidth="140" Padding="14,8" Margin="12,0,0,0" Click="Issues_Click"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 

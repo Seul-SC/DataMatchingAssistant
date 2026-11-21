@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 
 namespace StudentScoreTool;
@@ -11,41 +10,31 @@ public partial class AboutWindow : Window
     {
         InitializeComponent();
         VersionTextBlock.Text = $"版本 {AppInfo.VersionDisplay}";
-        TryLoadQr("tips-wechat.png", WeChatQrImage, WeChatQrPlaceholder);
-        TryLoadQr("tips-alipay.png", AlipayQrImage, AlipayQrPlaceholder);
     }
 
-    private static void TryLoadQr(string fileName, System.Windows.Controls.Image image, UIElement placeholder)
+    private void Email_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            var uri = new Uri($"pack://application:,,,/Assets/{fileName}", UriKind.Absolute);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.UriSource = uri;
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            image.Source = bitmap;
-            image.Visibility = Visibility.Visible;
-            placeholder.Visibility = Visibility.Collapsed;
-        }
-        catch
-        {
-            image.Source = null;
-            image.Visibility = Visibility.Collapsed;
-            placeholder.Visibility = Visibility.Visible;
-        }
+        OpenUrl(AppInfo.MailtoUrl);
     }
 
-    private void GitHubLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    private void Issues_Click(object sender, RoutedEventArgs e)
+    {
+        OpenUrl(AppInfo.GitHubIssuesUrl);
+    }
+
+    private void ExternalLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        OpenUrl(e.Uri.AbsoluteUri);
+        e.Handled = true;
+    }
+
+    private static void OpenUrl(string url)
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = e.Uri.AbsoluteUri,
+            FileName = url,
             UseShellExecute = true
         });
-        e.Handled = true;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

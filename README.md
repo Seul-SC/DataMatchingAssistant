@@ -18,7 +18,7 @@
 - 支持将 `.xlsx`、`.xls` 或 `.csv` 文件拖入窗口，选中后突出显示文件名，并记住上次使用的路径。名单若是 `.xls` 或 `.csv`，结果会另存为 `.xlsx`，不改动原文件。
 - 处理顺利时弹出成功提示；有问题时列出清单，关闭后可在主界面再次打开。处理完成后也可打开结果所在文件夹。
 - 可在浅色、深色、薄荷绿、深薄荷四种主题之间切换，并记住上次选择。
-- 「关于」中可查看作者、GitHub 链接，以及自愿的「赞赏作者」入口。不赞赏也可以使用全部功能。
+- 「关于」中可查看作者和 GitHub 链接。有问题或建议，可发邮件至 1753534364@qq.com，或在 GitHub Issues 留言。
 - 所有表格均在本地处理，不上传学生数据，不需要 API 密钥。
 
 ## 使用
@@ -65,15 +65,6 @@ dotnet run --project StudentScoreTool/StudentScoreTool.csproj
 ```
 
 主题、上次打开的文件路径保存在 `%LocalAppData%\DataMatchingAssistant\settings.json`，不会放在安装目录的 `current` 文件夹里，以免更新时被覆盖。
-
-### 放入赞赏码
-
-关于窗口已为微信、支付宝赞赏码留好位置。把图片分别保存为：
-
-- `StudentScoreTool/Assets/tips-wechat.png`
-- `StudentScoreTool/Assets/tips-alipay.png`
-
-项目会在文件存在时自动打包进软件。请使用微信 / 支付宝的「赞赏码」，不要用普通个人收款码。文案请使用「赞赏作者」「请作者喝杯咖啡」「支持作者」，不要使用「捐款」「募捐」「公益」。
 
 ## 如何发布新版本
 

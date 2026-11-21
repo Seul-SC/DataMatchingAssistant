@@ -403,13 +403,5 @@
             </Setter>
         </Style>
 
-        <Style x:Key="QrPlaceholderBorder" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource CardAltBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Height" Value="180"/>
-            <Setter Property="SnapsToDevicePixels" Value="True"/>
-        </Style>
     </Application.Resources>
 </Application>
