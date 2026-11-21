@@ -16,9 +16,8 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Border x:Name="StickerBorder" Width="148" Height="148" Background="{DynamicResource CardBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="20">
-                <Image x:Name="StickerImage" Margin="8" Stretch="Uniform"
+            <Border x:Name="StickerBorder" Width="148" Height="148" Background="Transparent" BorderThickness="0">
+                <Image x:Name="StickerImage" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="HighQuality"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="20,4,0,0" VerticalAlignment="Center">
