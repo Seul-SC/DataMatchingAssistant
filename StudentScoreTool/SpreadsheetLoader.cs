@@ -244,8 +244,8 @@ public static class SpreadsheetLoader
 
         if (LooksLikeLeadingZeroId(trimmed))
         {
+            cell.Style.NumberFormat.SetFormat("@");
             cell.Value = trimmed;
-            cell.SetDataType(XLDataType.Text);
             return;
         }
 
