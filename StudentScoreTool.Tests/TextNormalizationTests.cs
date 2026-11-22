@@ -39,7 +39,8 @@ public sealed class TextNormalizationTests
     [Fact]
     public void DisplayTextKeepsRemarksAndTrimsSpaces()
     {
-        Assert.Equal("张伟（重修）", TextNormalization.DisplayText("  张伟（重修） "));
+        // DisplayText 会把全角字符转成半角（便于解析成绩），括号也会变成半角。
+        Assert.Equal("张伟(重修)", TextNormalization.DisplayText("  张伟（重修） "));
     }
 
     [Theory]
