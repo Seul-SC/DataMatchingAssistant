@@ -12,7 +12,10 @@ public sealed class UpdateMessagesTests
         {
             UpdateMessages.UpToDate("1.1.0"),
             UpdateMessages.UpdateAvailable("1.2.0", "1.1.0"),
-            UpdateMessages.NotInstalled,
+            UpdateMessages.InvalidManifest,
+            UpdateMessages.ChecksumMismatch,
+            UpdateMessages.MigrationSummary,
+            UpdateMessages.MigrationDetails,
             UpdateMessages.CheckFailed("网络超时"),
             UpdateMessages.DownloadFailed("校验失败"),
             UpdateMessages.NoReleaseNotes
@@ -57,8 +60,8 @@ public sealed class UpdateMessagesTests
         Assert.Equal("Seul_SC_照晨", AppInfo.Author);
         Assert.Equal("https://github.com/Seul-SC/DataMatchingAssistant", AppInfo.GitHubUrl);
         Assert.Equal("https://gitee.com/seul-sc/DataMatchingAssistant", AppInfo.GiteeRepoUrl);
-        Assert.Equal("https://gitee.com/seul-sc/DataMatchingAssistant/releases/download/latest", AppInfo.UpdateFeedUrl);
-        Assert.Equal(AppInfo.UpdateFeedUrl, UpdateService.UpdateFeedUrl);
+        Assert.Equal("https://gitee.com/seul-sc/DataMatchingAssistant/raw/main/update/version.json", AppInfo.UpdateManifestUrl);
+        Assert.Equal("https://raw.githubusercontent.com/Seul-SC/DataMatchingAssistant/main/update/version.json", AppInfo.UpdateManifestFallbackUrl);
         Assert.Equal("DataMatchingAssistant", AppInfo.PackId);
     }
 }

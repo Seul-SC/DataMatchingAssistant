@@ -11,9 +11,9 @@
     <Product>数据匹配助手</Product>
     <Company>Seul_SC_照晨</Company>
     <Description>在本地匹配表格数据并将成绩写入现有 Excel 名单表。</Description>
-    <Version>1.2.0</Version>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
+    <Version>1.3.0</Version>
+    <AssemblyVersion>1.3.0.0</AssemblyVersion>
+    <FileVersion>1.3.0.0</FileVersion>
     <StartupObject>StudentScoreTool.Program</StartupObject>
   </PropertyGroup>
 
@@ -22,9 +22,21 @@
     <PackageReference Include="ExcelDataReader" Version="3.7.0" />
     <PackageReference Include="ExcelDataReader.DataSet" Version="3.7.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
-    <PackageReference Include="Velopack" Version="1.2.161" />
     <Resource Include="Assets\app.png" />
     <Resource Include="Assets\stickers\*.png" />
+  </ItemGroup>
+
+  <!--
+    1.3.0 起正式安装包改用 Inno Setup，软件自己检查 Gitee 上的 update/version.json 来更新，不再依赖 Velopack。
+    只有给旧版（1.1.0 / 1.2.0，Velopack 安装）准备的「过渡包」才用 -p:VelopackBridge=true 编译：
+    它保留 Velopack 的安装/更新钩子，并在启动后引导用户改装 Inno 版本。
+  -->
+  <PropertyGroup Condition="'$(VelopackBridge)' == 'true'">
+    <DefineConstants>$(DefineConstants);VELOPACK_BRIDGE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(VelopackBridge)' == 'true'">
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
 </Project>

@@ -8,47 +8,74 @@ public partial class UpdateWindow : Window
 {
     private readonly UpdateCheckResult _result;
     private readonly UpdateService _updateService;
+    private readonly string? _legacyRoot;
+    private readonly string _updateButtonText;
     private bool _isUpdating;
 
+    /// <summary>安装向导已经启动，调用方应退出软件。</summary>
     public bool StartedUpdate { get; private set; }
 
-    public UpdateWindow(UpdateCheckResult result, UpdateService updateService)
+    /// <param name="legacyRoot">旧版 Velopack 安装根目录。不为空时显示「改用新安装方式」的说明，并让安装包删除旧版。</param>
+    public UpdateWindow(UpdateCheckResult result, UpdateService updateService, string? legacyRoot = null)
     {
         InitializeComponent();
         _result = result;
         _updateService = updateService;
-        SummaryTextBlock.Text = result.Message;
-        NotesTextBlock.Text = string.IsNullOrWhiteSpace(result.ReleaseNotes)
+        _legacyRoot = legacyRoot;
+
+        var notes = string.IsNullOrWhiteSpace(result.ReleaseNotes)
             ? UpdateMessages.NoReleaseNotes
             : result.ReleaseNotes;
+
+        if (legacyRoot is null)
+        {
+            SummaryTextBlock.Text = result.Message;
+            NotesTextBlock.Text = notes;
+            _updateButtonText = "更新";
+        }
+        else
+        {
+            Title = UpdateMessages.MigrationTitle;
+            HeaderTextBlock.Text = UpdateMessages.MigrationTitle;
+            SummaryTextBlock.Text = UpdateMessages.MigrationSummary;
+            NotesTextBlock.Text = $"{UpdateMessages.MigrationDetails}\n\n—— {result.AvailableVersion} 更新说明 ——\n{notes}";
+            _updateButtonText = "下载并安装";
+        }
+
+        UpdateButton.Content = _updateButtonText;
     }
 
     private async void Update_Click(object sender, RoutedEventArgs e)
     {
-        if (_isUpdating || _result.Manager is null || _result.Update is null)
+        if (_isUpdating || _result.Manifest is null)
         {
             return;
         }
 
         _isUpdating = true;
-        StartedUpdate = true;
         LaterButton.IsEnabled = false;
         UpdateButton.IsEnabled = false;
-        UpdateButton.Content = "正在更新…";
+        UpdateButton.Content = "正在下载…";
         ProgressTextBlock.Visibility = Visibility.Visible;
         DownloadProgressBar.Visibility = Visibility.Visible;
-        ProgressTextBlock.Text = "正在下载更新包…";
+        DownloadProgressBar.Value = 0;
+        ProgressTextBlock.Text = "正在下载安装包…";
 
         try
         {
-            await _updateService.DownloadAndApplyAsync(
-                _result.Manager,
-                _result.Update,
-                progress => Dispatcher.Invoke(() =>
-                {
-                    DownloadProgressBar.Value = progress;
-                    ProgressTextBlock.Text = $"正在下载更新包… {progress}%";
-                }));
+            var progress = new Progress<int>(percent =>
+            {
+                DownloadProgressBar.Value = percent;
+                ProgressTextBlock.Text = $"正在下载安装包… {percent}%";
+            });
+
+            var installer = await _updateService.DownloadInstallerAsync(_result.Manifest, progress);
+            ProgressTextBlock.Text = "下载完成，正在打开安装向导…";
+            UpdateService.LaunchInstaller(installer, LegacyInstall.BuildInstallerArguments(_legacyRoot));
+
+            StartedUpdate = true;
+            _isUpdating = false;
+            DialogResult = true;
         }
         catch (Exception ex)
         {
@@ -56,9 +83,14 @@ public partial class UpdateWindow : Window
             StartedUpdate = false;
             LaterButton.IsEnabled = true;
             UpdateButton.IsEnabled = true;
-            UpdateButton.Content = "立即更新";
-            MessageBox.Show(this, UpdateMessages.DownloadFailed(ex.Message), "更新失败",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            UpdateButton.Content = _updateButtonText;
+            ProgressTextBlock.Visibility = Visibility.Collapsed;
+            DownloadProgressBar.Visibility = Visibility.Collapsed;
+            var detail = ex is InvalidOperationException { InnerException: Win32Exception }
+                ? ex.Message
+                : UpdateMessages.DownloadFailed(UpdateMessages.Describe(ex))
+                  + $"\n\n也可以到 Gitee 发布页手动下载：{AppInfo.GiteeReleasesUrl}";
+            MessageBox.Show(this, detail, "更新失败", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
