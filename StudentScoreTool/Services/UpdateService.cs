@@ -28,11 +28,11 @@ public sealed class UpdateCheckResult
 
 public sealed class UpdateService
 {
-    public const string GitHubRepoUrl = AppInfo.GitHubUrl;
+    public const string UpdateFeedUrl = AppInfo.UpdateFeedUrl;
 
     public UpdateManager CreateManager()
     {
-        var source = new GithubSource(GitHubRepoUrl, accessToken: null, prerelease: false);
+        var source = new SimpleWebSource(UpdateFeedUrl);
         return new UpdateManager(source);
     }
 

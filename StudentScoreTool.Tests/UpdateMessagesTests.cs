@@ -31,22 +31,22 @@ public sealed class UpdateMessagesTests
     }
 
     [Theory]
-    [InlineData("MintLight", true)]
-    [InlineData("mintlight", true)]
-    [InlineData("DeepMint", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void ThemeParserAcceptsKnownNames(string? value, bool expected)
+    [InlineData("MintLight", true, AppTheme.MintLight)]
+    [InlineData("mintlight", true, AppTheme.MintLight)]
+    [InlineData("Accompany", true, AppTheme.Accompany)]
+    [InlineData("Ripple", true, AppTheme.Ripple)]
+    [InlineData("MintDeep", false, AppTheme.Light)]
+    [InlineData("DeepMint", false, AppTheme.Light)]
+    [InlineData("", false, AppTheme.Light)]
+    [InlineData(null, false, AppTheme.Light)]
+    public void ThemeParserAcceptsKnownNames(string? value, bool expected, AppTheme fallbackOrParsed)
     {
         var parsed = AppThemeNames.TryParse(value, out var theme);
         Assert.Equal(expected, parsed);
-        if (expected)
+        Assert.Equal(fallbackOrParsed, expected ? theme : AppTheme.Light);
+        if (string.Equals(value, "MintDeep", StringComparison.OrdinalIgnoreCase))
         {
-            Assert.Equal(AppTheme.MintLight, theme);
-        }
-        else
-        {
-            Assert.Equal(AppTheme.Light, theme);
+            Assert.Equal(AppTheme.Light, AppThemeNames.ParseOrFallback(value));
         }
     }
 
@@ -56,6 +56,9 @@ public sealed class UpdateMessagesTests
         Assert.Equal("数据匹配助手", AppInfo.Name);
         Assert.Equal("Seul_SC_照晨", AppInfo.Author);
         Assert.Equal("https://github.com/Seul-SC/DataMatchingAssistant", AppInfo.GitHubUrl);
+        Assert.Equal("https://gitee.com/seul-sc/DataMatchingAssistant", AppInfo.GiteeRepoUrl);
+        Assert.Equal("https://gitee.com/seul-sc/DataMatchingAssistant/releases/download/latest", AppInfo.UpdateFeedUrl);
+        Assert.Equal(AppInfo.UpdateFeedUrl, UpdateService.UpdateFeedUrl);
         Assert.Equal("DataMatchingAssistant", AppInfo.PackId);
     }
 }

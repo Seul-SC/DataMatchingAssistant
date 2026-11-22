@@ -38,36 +38,36 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="外观" VerticalAlignment="Center" FontSize="12"
-                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,6,0"/>
-                    <Button x:Name="ThemeLightButton" Style="{StaticResource ThemeSwatchButton}"
-                            Tag="Light" ToolTip="浅色" Click="ThemeSwatch_Click"
-                            AutomationProperties.Name="浅色">
-                        <Border x:Name="ThemeLightRing" Width="22" Height="22" CornerRadius="11"
-                                BorderThickness="2" BorderBrush="{DynamicResource BorderBrush}"
-                                Background="#F3F4F6"/>
-                    </Button>
-                    <Button x:Name="ThemeDarkButton" Style="{StaticResource ThemeSwatchButton}"
-                            Tag="Dark" ToolTip="深色" Click="ThemeSwatch_Click"
-                            AutomationProperties.Name="深色">
-                        <Border x:Name="ThemeDarkRing" Width="22" Height="22" CornerRadius="11"
-                                BorderThickness="2" BorderBrush="{DynamicResource BorderBrush}"
-                                Background="#1B1D21"/>
-                    </Button>
-                    <Button x:Name="ThemeMintLightButton" Style="{StaticResource ThemeSwatchButton}"
-                            Tag="MintLight" ToolTip="薄荷绿" Click="ThemeSwatch_Click"
-                            AutomationProperties.Name="薄荷绿">
-                        <Border x:Name="ThemeMintLightRing" Width="22" Height="22" CornerRadius="11"
-                                BorderThickness="2" BorderBrush="{DynamicResource BorderBrush}"
-                                Background="#98FF98"/>
-                    </Button>
-                    <Button x:Name="ThemeMintDeepButton" Style="{StaticResource ThemeSwatchButton}"
-                            Tag="MintDeep" ToolTip="深薄荷" Click="ThemeSwatch_Click"
-                            AutomationProperties.Name="深薄荷">
-                        <Border x:Name="ThemeMintDeepRing" Width="22" Height="22" CornerRadius="11"
-                                BorderThickness="2" BorderBrush="{DynamicResource BorderBrush}"
-                                Background="#3EB489"/>
-                    </Button>
+                    <Grid x:Name="ThemeMenuHost"
+                          MouseEnter="ThemeMenu_MouseEnter"
+                          MouseLeave="ThemeMenu_MouseLeave">
+                        <Button x:Name="ThemeMenuButton" Style="{StaticResource ToolbarButton}"
+                                Content="外观" Padding="14,0,16,0"
+                                Click="ThemeMenuButton_Click"
+                                PreviewKeyDown="ThemeMenuButton_PreviewKeyDown"
+                                ToolTip="选择外观主题"
+                                AutomationProperties.Name="外观"/>
+                        <Popup x:Name="ThemePopup"
+                               PlacementTarget="{Binding ElementName=ThemeMenuButton}"
+                               Placement="Bottom"
+                               AllowsTransparency="True"
+                               StaysOpen="True"
+                               PopupAnimation="Fade">
+                            <Border x:Name="ThemePopupBorder"
+                                    Margin="0,6,0,0" Padding="8,8"
+                                    Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="12"
+                                    MouseEnter="ThemeMenu_MouseEnter"
+                                    MouseLeave="ThemeMenu_MouseLeave">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.18"
+                                                      Color="#000000" Direction="270"/>
+                                </Border.Effect>
+                                <StackPanel x:Name="ThemeMenuItems"/>
+                            </Border>
+                        </Popup>
+                    </Grid>
 
                     <Grid Margin="16,0,0,0">
                         <Button x:Name="CheckUpdateButton" Style="{StaticResource ToolbarButton}"
@@ -89,7 +89,7 @@
         </Border>
 
         <TextBlock DockPanel.Dock="Bottom" Margin="28,0,28,16"
-                   Text="所有表格均在本地处理，不会上传学生数据。检查更新时只向 GitHub 查询版本信息。"
+                   Text="所有表格均在本地处理，不会上传学生数据。检查更新时只向 Gitee 查询版本信息。"
                    TextAlignment="Center" FontSize="12"
                    Foreground="{DynamicResource TextMutedBrush}"/>
 

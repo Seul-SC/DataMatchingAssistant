@@ -11,9 +11,9 @@
     <Product>数据匹配助手</Product>
     <Company>Seul_SC_照晨</Company>
     <Description>在本地匹配表格数据并将成绩写入现有 Excel 名单表。</Description>
-    <Version>1.1.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
     <StartupObject>StudentScoreTool.Program</StartupObject>
   </PropertyGroup>
 

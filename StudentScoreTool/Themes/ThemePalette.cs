@@ -26,18 +26,10 @@ public sealed record ThemePalette(
     {
         AppTheme.Dark => Dark,
         AppTheme.MintLight => MintLight,
-        AppTheme.MintDeep => MintDeep,
+        AppTheme.Accompany => Accompany,
+        AppTheme.Ripple => Ripple,
         _ => Light
     };
-
-    public static IReadOnlyDictionary<AppTheme, ThemePalette> All { get; } =
-        new Dictionary<AppTheme, ThemePalette>
-        {
-            [AppTheme.Light] = Light,
-            [AppTheme.Dark] = Dark,
-            [AppTheme.MintLight] = MintLight,
-            [AppTheme.MintDeep] = MintDeep
-        };
 
     // 浅色：接近 Windows 11 的干净工具风，白卡片 + 中性灰背景 + 蓝色主按钮。
     public static ThemePalette Light { get; } = new(
@@ -108,26 +100,61 @@ public sealed record ThemePalette(
         AttentionForeground: "#FFFFFF",
         Swatch: "#98FF98");
 
-    // 深薄荷：#3EB489 作为装饰色，窗口用深绿中性底；主按钮用 #98FF98 配深色文字。
-    public static ThemePalette MintDeep { get; } = new(
-        WindowBackground: "#102820",
-        TopBarBackground: "#143127",
-        CardBackground: "#17352C",
-        CardAltBackground: "#1C3F34",
-        InputBackground: "#1C3F34",
-        HoverBackground: "#1F463B",
-        Border: "#2D5E4E",
-        TextPrimary: "#F2FFF8",
-        TextSecondary: "#C8EBDA",
-        TextMuted: "#95C8B4",
-        Accent: "#98FF98",
-        AccentHover: "#B6FFB6",
-        AccentForeground: "#0C241C",
-        AccentSoft: "#215C48",
-        Danger: "#F87171",
-        Success: "#98FF98",
-        Attention: "#FBBF24",
-        AttentionHover: "#FCD34D",
-        AttentionForeground: "#0C241C",
-        Swatch: "#3EB489");
+    // 同行：色值取自同步待办 1.2.0 的 accompany 主题，只模仿颜色。
+    // 主色 #194253，悬停态为略提亮的同色（仍与白字对比 ≥ 4.5:1）。
+    // AccentSoft / HoverBackground 为主色约 16% / 14% 透明度叠在浅色表面上的实色。
+    public static ThemePalette Accompany { get; } = new(
+        WindowBackground: "#F8FDFF",
+        TopBarBackground: "#EDF9FC",
+        CardBackground: "#FFFFFF",
+        CardAltBackground: "#E5FAFF",
+        InputBackground: "#FFFFFF",
+        HoverBackground: "#D9E3E7",
+        Border: "#D5EEF4",
+        TextPrimary: "#00232C",
+        TextSecondary: "#334F56",
+        TextMuted: "#405A61",
+        Accent: "#194253",
+        AccentHover: "#355968",
+        AccentForeground: "#FFFFFF",
+        AccentSoft: "#DAE1E3",
+        Danger: "#C62828",
+        Success: "#157A45",
+        Attention: "#C2410C",
+        AttentionHover: "#9A3412",
+        AttentionForeground: "#FFFFFF",
+        Swatch: "#194253");
+
+    // 涟漪：色值取自同步待办 1.2.0 的 ripple 主题，只模仿颜色。显示名必须是「涟漪」。
+    public static ThemePalette Ripple { get; } = new(
+        WindowBackground: "#F5F9FF",
+        TopBarBackground: "#CBDDFE",
+        CardBackground: "#FFFFFF",
+        CardAltBackground: "#E6EFFF",
+        InputBackground: "#FFFFFF",
+        HoverBackground: "#DBE4F3",
+        Border: "#DCE8FF",
+        TextPrimary: "#001F4F",
+        TextSecondary: "#334C72",
+        TextMuted: "#40577B",
+        Accent: "#3A66AC",
+        AccentHover: "#4A72B3",
+        AccentForeground: "#FFFFFF",
+        AccentSoft: "#DFE7F2",
+        Danger: "#C62828",
+        Success: "#157A45",
+        Attention: "#C2410C",
+        AttentionHover: "#9A3412",
+        AttentionForeground: "#FFFFFF",
+        Swatch: "#3A66AC");
+
+    public static IReadOnlyDictionary<AppTheme, ThemePalette> All { get; } =
+        new Dictionary<AppTheme, ThemePalette>
+        {
+            [AppTheme.Light] = Light,
+            [AppTheme.MintLight] = MintLight,
+            [AppTheme.Accompany] = Accompany,
+            [AppTheme.Ripple] = Ripple,
+            [AppTheme.Dark] = Dark
+        };
 }

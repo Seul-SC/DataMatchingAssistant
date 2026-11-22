@@ -5,37 +5,66 @@ namespace StudentScoreTool.Tests;
 public sealed class ThemePaletteTests
 {
     [Fact]
-    public void AllFourThemesAreDefined()
+    public void FiveThemesAreDefinedInDisplayOrder()
     {
-        Assert.Equal(4, ThemePalette.All.Count);
-        Assert.Contains(AppTheme.Light, ThemePalette.All.Keys);
-        Assert.Contains(AppTheme.Dark, ThemePalette.All.Keys);
-        Assert.Contains(AppTheme.MintLight, ThemePalette.All.Keys);
-        Assert.Contains(AppTheme.MintDeep, ThemePalette.All.Keys);
+        Assert.Equal(5, ThemePalette.All.Count);
+        Assert.Equal(
+            new[] { AppTheme.Light, AppTheme.MintLight, AppTheme.Accompany, AppTheme.Ripple, AppTheme.Dark },
+            AppThemeNames.DisplayOrder);
+        Assert.False(Enum.IsDefined(typeof(AppTheme), "MintDeep"));
+        foreach (var theme in AppThemeNames.DisplayOrder)
+        {
+            Assert.Contains(theme, ThemePalette.All.Keys);
+            Assert.Same(ThemePalette.For(theme), ThemePalette.All[theme]);
+        }
     }
 
     [Theory]
     [InlineData(AppTheme.Light, "浅色")]
-    [InlineData(AppTheme.Dark, "深色")]
     [InlineData(AppTheme.MintLight, "薄荷绿")]
-    [InlineData(AppTheme.MintDeep, "深薄荷")]
+    [InlineData(AppTheme.Accompany, "同行")]
+    [InlineData(AppTheme.Ripple, "涟漪")]
+    [InlineData(AppTheme.Dark, "深色")]
     public void DisplayNamesAreInSimplifiedChinese(AppTheme theme, string expected)
     {
         Assert.Equal(expected, AppThemeNames.GetDisplayName(theme));
     }
 
     [Fact]
-    public void MintThemesUseRequestedAccentSwatches()
+    public void RippleDisplayNameUsesExactRippleCharacters()
+    {
+        Assert.Equal("\u6D9F\u6F2A", AppThemeNames.GetDisplayName(AppTheme.Ripple));
+        Assert.Equal(2, AppThemeNames.GetDisplayName(AppTheme.Ripple).Length);
+    }
+
+    [Fact]
+    public void RequestedThemeSwatchesMatchSourceColors()
     {
         Assert.Equal("#98FF98", ThemePalette.MintLight.Swatch, ignoreCase: true);
-        Assert.Equal("#3EB489", ThemePalette.MintDeep.Swatch, ignoreCase: true);
+        Assert.Equal("#194253", ThemePalette.Accompany.Swatch, ignoreCase: true);
+        Assert.Equal("#3A66AC", ThemePalette.Ripple.Swatch, ignoreCase: true);
+        Assert.Equal("#194253", ThemePalette.Accompany.Accent, ignoreCase: true);
+        Assert.Equal("#F8FDFF", ThemePalette.Accompany.WindowBackground, ignoreCase: true);
+        Assert.Equal("#EDF9FC", ThemePalette.Accompany.TopBarBackground, ignoreCase: true);
+        Assert.Equal("#FFFFFF", ThemePalette.Accompany.CardBackground, ignoreCase: true);
+        Assert.Equal("#D5EEF4", ThemePalette.Accompany.Border, ignoreCase: true);
+        Assert.Equal("#00232C", ThemePalette.Accompany.TextPrimary, ignoreCase: true);
+        Assert.Equal("#FFFFFF", ThemePalette.Accompany.AccentForeground, ignoreCase: true);
+        Assert.Equal("#3A66AC", ThemePalette.Ripple.Accent, ignoreCase: true);
+        Assert.Equal("#F5F9FF", ThemePalette.Ripple.WindowBackground, ignoreCase: true);
+        Assert.Equal("#CBDDFE", ThemePalette.Ripple.TopBarBackground, ignoreCase: true);
+        Assert.Equal("#FFFFFF", ThemePalette.Ripple.CardBackground, ignoreCase: true);
+        Assert.Equal("#DCE8FF", ThemePalette.Ripple.Border, ignoreCase: true);
+        Assert.Equal("#001F4F", ThemePalette.Ripple.TextPrimary, ignoreCase: true);
+        Assert.Equal("#FFFFFF", ThemePalette.Ripple.AccentForeground, ignoreCase: true);
     }
 
     [Theory]
     [InlineData(AppTheme.Light)]
-    [InlineData(AppTheme.Dark)]
     [InlineData(AppTheme.MintLight)]
-    [InlineData(AppTheme.MintDeep)]
+    [InlineData(AppTheme.Accompany)]
+    [InlineData(AppTheme.Ripple)]
+    [InlineData(AppTheme.Dark)]
     public void PrimaryAndMutedTextMeetContrastOnSurfaces(AppTheme theme)
     {
         var palette = ThemePalette.For(theme);
@@ -63,9 +92,10 @@ public sealed class ThemePaletteTests
 
     [Theory]
     [InlineData(AppTheme.Light)]
-    [InlineData(AppTheme.Dark)]
     [InlineData(AppTheme.MintLight)]
-    [InlineData(AppTheme.MintDeep)]
+    [InlineData(AppTheme.Accompany)]
+    [InlineData(AppTheme.Ripple)]
+    [InlineData(AppTheme.Dark)]
     public void AccentButtonsMeetContrast(AppTheme theme)
     {
         var palette = ThemePalette.For(theme);
@@ -82,9 +112,10 @@ public sealed class ThemePaletteTests
 
     [Theory]
     [InlineData(AppTheme.Light)]
-    [InlineData(AppTheme.Dark)]
     [InlineData(AppTheme.MintLight)]
-    [InlineData(AppTheme.MintDeep)]
+    [InlineData(AppTheme.Accompany)]
+    [InlineData(AppTheme.Ripple)]
+    [InlineData(AppTheme.Dark)]
     public void AttentionButtonsMeetContrast(AppTheme theme)
     {
         var palette = ThemePalette.For(theme);
@@ -101,5 +132,15 @@ public sealed class ThemePaletteTests
     {
         var ratio = ColorContrast.Ratio("#FFFFFF", "#2563EB");
         Assert.InRange(ratio, 5.1, 5.3);
+    }
+
+    [Fact]
+    public void UnknownOrRemovedThemesFallBackToLight()
+    {
+        Assert.False(AppThemeNames.TryParse("MintDeep", out var parsed));
+        Assert.Equal(AppTheme.Light, parsed);
+        Assert.Equal(AppTheme.Light, AppThemeNames.ParseOrFallback("MintDeep"));
+        Assert.Equal(AppTheme.Light, AppThemeNames.ParseOrFallback("深薄荷"));
+        Assert.Equal(ThemePalette.Light, ThemePalette.For((AppTheme)99));
     }
 }
