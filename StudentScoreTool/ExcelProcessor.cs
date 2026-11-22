@@ -96,6 +96,11 @@ public sealed class ExcelProcessor
             var writes = new List<WritePlan>();
             var blankScoreCount = 0;
             var pendingOverwrites = new List<PendingOverwrite>();
+            var columnsWithAnyGrade = mappings
+                .Where(mapping => sourceLayout.Students.Any(student =>
+                    !IsEffectivelyEmpty(sourceSheet.Cell(student.Row, mapping.Source.Column))))
+                .Select(mapping => mapping.Source.Column)
+                .ToHashSet();
 
             foreach (var match in matches.OrderBy(item => item.Target.Row))
             {
@@ -105,7 +110,14 @@ public sealed class ExcelProcessor
                     var columnTitle = mapping.Target.FullHeader;
                     if (IsEffectivelyEmpty(sourceCell))
                     {
+                        // 成绩表空格一律保持名单原样，不填入。
+                        // 仅当同一作业既有成绩又有空格时，才在问题窗列出；整列都空则不列为问题。
                         blankScoreCount++;
+                        if (!columnsWithAnyGrade.Contains(mapping.Source.Column))
+                        {
+                            continue;
+                        }
+
                         var targetCellForBlank = targetSheet.Cell(match.Target.Row, mapping.Target.Column);
                         var original = FormatScore(GetCellValue(targetCellForBlank), targetCellForBlank);
                         issues.Add(new ScoreIssue(

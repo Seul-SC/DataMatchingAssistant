@@ -1,6 +1,13 @@
 # 使用 GITHUB_TOKEN 打包并上传 Velopack 资源。
 # 建议在推送 v* 标签，或在 Actions 里手动运行。
 # 不要在每次推送到 main 时自动发布。
+#
+# 从 1.2.0 起，打包使用 --msi --instLocation Either，并且不会把
+# Setup.exe / Portable.zip 作为对外安装程序上传。
+# 已安装 1.1.0 的用户仍从本仓库的 GitHub Releases 检查更新，
+# 因此 1.2.0 的更新包仍须发布到 GitHub。软件内 1.2.0 之后的检查改走 Gitee，
+# 需要另外把同样的更新文件发布到 https://gitee.com/seul-sc/DataMatchingAssistant
+# （版本 Release + 名为 latest 的 Release）。工作流不会使用 Gitee 令牌。
 name: Release Velopack
 
 on:
@@ -81,6 +88,36 @@ jobs:
           --releaseNotes packaging/release-notes.md
           --outputDir Releases
           --channel win
+          --msi
+          --instLocation Either
+
+      - name: Keep MSI as the advertised installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get-version.outputs.version }}"
+          $outputDir = "Releases"
+          $unpublishedDir = Join-Path $outputDir "unpublished-installers"
+          New-Item -ItemType Directory -Path $unpublishedDir -Force | Out-Null
+          Get-ChildItem -Path $outputDir -File | Where-Object {
+            $_.Name -like "*Setup.exe" -or $_.Name -like "*Portable.zip"
+          } | ForEach-Object {
+            Move-Item -Path $_.FullName -Destination (Join-Path $unpublishedDir $_.Name) -Force
+          }
+          $msi = Get-ChildItem -Path $outputDir -File -Filter "*.msi" | Select-Object -First 1
+          $advertisedName = "DataMatchingAssistant-$version-Setup.msi"
+          if ($msi -and $msi.Name -ne $advertisedName) {
+            Copy-Item -Path $msi.FullName -Destination (Join-Path $outputDir $advertisedName) -Force
+          }
+          $assetsPath = Join-Path $outputDir "assets.win.json"
+          if (Test-Path $assetsPath) {
+            $raw = Get-Content -Path $assetsPath -Raw -Encoding UTF8
+            foreach ($name in @("Setup.exe", "Portable.zip")) {
+              $raw = [regex]::Replace($raw, '(?s),\s*\{[^{}]*' + [regex]::Escape($name) + '[^{}]*\}', "")
+              $raw = [regex]::Replace($raw, '(?s)\{\s*[^{}]*' + [regex]::Escape($name) + '[^{}]*\}\s*,', "")
+            }
+            Set-Content -Path $assetsPath -Value $raw -Encoding UTF8
+          }
+          Get-ChildItem $outputDir | Select-Object Name, Length | Format-Table -AutoSize
 
       - name: Upload to GitHub Releases
         run: >

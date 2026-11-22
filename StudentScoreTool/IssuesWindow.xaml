@@ -11,19 +11,24 @@
     <Grid Margin="24,22,24,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <StackPanel x:Name="StickerPanel" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,12"/>
-            <TextBlock x:Name="TitleTextBlock" Text="处理完成，不过有几处要看一看"
-                       FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <TextBlock x:Name="IntroTextBlock" Margin="0,8,0,0" FontSize="14"
-                       TextWrapping="Wrap" LineHeight="22"
-                       Foreground="{DynamicResource TextSecondaryBrush}"/>
-            <Border Margin="0,12,0,0" Padding="10,8"
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel x:Name="StickerPanel" Grid.Column="0" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="0,0,18,0"/>
+                <TextBlock x:Name="IntroTextBlock" Grid.Column="1"
+                           Style="{StaticResource HumorText}"
+                           VerticalAlignment="Center"/>
+            </Grid>
+            <Border Margin="0,14,0,0" Padding="10,8"
                     Background="{DynamicResource AccentSoftBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1" CornerRadius="8">
@@ -32,7 +37,12 @@
             </Border>
         </StackPanel>
 
-        <Border Grid.Row="1"
+        <TextBlock x:Name="TitleTextBlock" Grid.Row="1"
+                   Text="一共 0 处需要留意"
+                   Margin="0,0,0,10" FontSize="16" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+        <Border Grid.Row="2"
                 Background="{DynamicResource CardBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1" CornerRadius="12">
@@ -121,7 +131,7 @@
             </ScrollViewer>
         </Border>
 
-        <DockPanel Grid.Row="2" Margin="0,16,0,0">
+        <DockPanel Grid.Row="3" Margin="0,16,0,0">
             <Button DockPanel.Dock="Right" Content="知道了" Width="120" Height="40"
                     Style="{StaticResource PrimaryButton}" FontSize="14"
                     IsDefault="True" IsCancel="True" Click="Close_Click"/>

@@ -31,7 +31,7 @@ public sealed class AppSettingsTests : IDisposable
         var path = Path.Combine(_directory, "settings.json");
         var original = new AppSettings
         {
-            Theme = AppTheme.MintDeep,
+            Theme = AppTheme.Ripple,
             LastSourcePath = Path.Combine(_directory, "来源.xlsx"),
             LastTargetPath = Path.Combine(_directory, "名单.xlsx")
         };
@@ -39,9 +39,29 @@ public sealed class AppSettingsTests : IDisposable
         original.Save(path);
         var loaded = AppSettings.Load(path);
 
-        Assert.Equal(AppTheme.MintDeep, loaded.Theme);
+        Assert.Equal(AppTheme.Ripple, loaded.Theme);
         Assert.Equal(original.LastSourcePath, loaded.LastSourcePath);
         Assert.Equal(original.LastTargetPath, loaded.LastTargetPath);
+    }
+
+    [Fact]
+    public void LoadMapsLegacyMintDeepToLightAndKeepsPaths()
+    {
+        var path = Path.Combine(_directory, "legacy.json");
+        var source = Path.Combine(_directory, "来源.xlsx");
+        var target = Path.Combine(_directory, "名单.xlsx");
+        File.WriteAllText(path,
+            "{\n  \"theme\": \"MintDeep\",\n  \"lastSourcePath\": "
+            + System.Text.Json.JsonSerializer.Serialize(source)
+            + ",\n  \"lastTargetPath\": "
+            + System.Text.Json.JsonSerializer.Serialize(target)
+            + "\n}");
+
+        var loaded = AppSettings.Load(path);
+
+        Assert.Equal(AppTheme.Light, loaded.Theme);
+        Assert.Equal(source, loaded.LastSourcePath);
+        Assert.Equal(target, loaded.LastTargetPath);
     }
 
     [Fact]

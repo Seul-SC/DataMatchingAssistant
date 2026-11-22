@@ -97,29 +97,62 @@ public sealed class MatchingRuleTests : IDisposable
     }
 
     [Fact]
-    public async Task ListsBlankSourceScoresAndKeepsOriginalValue()
+    public async Task ListsBlankSourceScoresOnlyWhenTheSameAssignmentHasSomeGrades()
     {
         var sourcePath = Path.Combine(_directory, "空分来源.xlsx");
         var targetPath = Path.Combine(_directory, "空分名单.xlsx");
         CreateSimple(sourcePath, "成绩", ["姓名", "学号", "成绩"], sheet =>
         {
             Add(sheet, 2, "张三", "001", "");
+            Add(sheet, 3, "李四", "002", 90);
         });
         CreateSimple(targetPath, "名单", ["姓名", "学号", "成绩"], sheet =>
         {
             Add(sheet, 2, "张三", "001", 88);
+            Add(sheet, 3, "李四", "002", "");
         });
 
         var result = await Process(sourcePath, targetPath);
 
         using var book = new XLWorkbook(targetPath);
-        Assert.Equal(88, book.Worksheet("名单").Cell("C2").GetDouble());
-        Assert.Equal(0, result.WrittenScoreCount);
+        var sheet = book.Worksheet("名单");
+        Assert.Equal(88, sheet.Cell("C2").GetDouble());
+        Assert.Equal(90, sheet.Cell("C3").GetDouble());
+        Assert.Equal(1, result.WrittenScoreCount);
         Assert.Equal(1, result.BlankScoreCount);
-        var issue = Assert.Single(result.Issues);
-        Assert.Equal(IssueCategories.BlankSource, issue.Category);
+        var issue = Assert.Single(result.Issues, item => item.Category == IssueCategories.BlankSource);
         Assert.Equal("张三", issue.StudentName);
         Assert.Contains("88", issue.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DoesNotListBlankSourceWhenEveryStudentIsEmptyForThatAssignment()
+    {
+        var sourcePath = Path.Combine(_directory, "整列空来源.xlsx");
+        var targetPath = Path.Combine(_directory, "整列空名单.xlsx");
+        CreateSimple(sourcePath, "成绩", ["姓名", "学号", "作业一", "作业二"], sheet =>
+        {
+            Add(sheet, 2, "张三", "001", "", 80);
+            Add(sheet, 3, "李四", "002", "", 91);
+        });
+        CreateSimple(targetPath, "名单", ["姓名", "学号", "作业一", "作业二"], sheet =>
+        {
+            Add(sheet, 2, "张三", "001", 70, "");
+            Add(sheet, 3, "李四", "002", 71, "");
+        });
+
+        var result = await Process(sourcePath, targetPath);
+
+        using var book = new XLWorkbook(targetPath);
+        var sheet = book.Worksheet("名单");
+        Assert.Equal(70, sheet.Cell("C2").GetDouble());
+        Assert.Equal(71, sheet.Cell("C3").GetDouble());
+        Assert.Equal(80, sheet.Cell("D2").GetDouble());
+        Assert.Equal(91, sheet.Cell("D3").GetDouble());
+        Assert.Equal(2, result.WrittenScoreCount);
+        Assert.Equal(2, result.BlankScoreCount);
+        Assert.DoesNotContain(result.Issues, issue => issue.Category == IssueCategories.BlankSource);
+        Assert.DoesNotContain(result.Issues, issue => issue.Message.Contains("作业一", StringComparison.Ordinal));
     }
 
     [Fact]

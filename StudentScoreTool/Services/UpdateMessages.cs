@@ -9,7 +9,7 @@ public static class UpdateMessages
         $"发现新版本 {newVersion}（当前为 {currentVersion}）。";
 
     public const string NotInstalled =
-        "当前不是通过安装包运行的版本，无法在线检查或安装更新。请先从 GitHub 下载并运行安装程序。";
+        "当前不是通过安装包运行的版本，无法在线检查或安装更新。请先下载并运行安装程序。";
 
     public const string AlreadyChecking = "正在检查更新，请稍候。";
 

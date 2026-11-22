@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using StudentScoreTool.Services;
 using StudentScoreTool.Themes;
@@ -26,11 +29,18 @@ public partial class MainWindow : Window
     private string? _lastIssueIntro;
     private IReadOnlyList<Uri> _lastIssueStickers = [];
     private UpdateCheckResult? _pendingUpdate;
+    private readonly DispatcherTimer _themeMenuCloseTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(220)
+    };
 
     public MainWindow()
     {
         InitializeComponent();
         VersionTextBlock.Text = AppInfo.VersionDisplay;
+        _themeMenuCloseTimer.Tick += ThemeMenuCloseTimer_Tick;
+        Deactivated += (_, _) => CloseThemeMenu();
+        BuildThemeMenu();
         RefreshThemeSwatches();
     }
 
@@ -53,6 +63,120 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BuildThemeMenu()
+    {
+        ThemeMenuItems.Children.Clear();
+        foreach (var theme in AppThemeNames.DisplayOrder)
+        {
+            var palette = ThemePalette.For(theme);
+            var swatch = new Border
+            {
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(9),
+                BorderThickness = new Thickness(1),
+                BorderBrush = (Brush)Application.Current.Resources["BorderBrush"],
+                Background = new SolidColorBrush(ThemeManager.ParseColor(palette.Swatch)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var name = new TextBlock
+            {
+                Text = AppThemeNames.GetDisplayName(theme),
+                Margin = new Thickness(10, 0, 0, 0),
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"]
+            };
+
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(swatch);
+            content.Children.Add(name);
+
+            var item = new Button
+            {
+                Tag = theme.ToString(),
+                Content = content,
+                Style = (Style)FindResource("ThemeMenuItemButton"),
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                ToolTip = AppThemeNames.GetDisplayName(theme)
+            };
+            AutomationProperties.SetName(item, AppThemeNames.GetDisplayName(theme));
+            item.Click += ThemeSwatch_Click;
+            item.PreviewKeyDown += ThemeMenuItem_PreviewKeyDown;
+            ThemeMenuItems.Children.Add(item);
+        }
+    }
+
+    private void ThemeMenu_MouseEnter(object sender, MouseEventArgs e)
+    {
+        _themeMenuCloseTimer.Stop();
+        ThemePopup.IsOpen = true;
+    }
+
+    private void ThemeMenu_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _themeMenuCloseTimer.Stop();
+        _themeMenuCloseTimer.Start();
+    }
+
+    private void ThemeMenuCloseTimer_Tick(object? sender, EventArgs e)
+    {
+        _themeMenuCloseTimer.Stop();
+        if (ThemeMenuHost.IsMouseOver || ThemePopupBorder.IsMouseOver || ThemeMenuButton.IsKeyboardFocusWithin)
+        {
+            return;
+        }
+
+        if (ThemeMenuItems.Children.OfType<Button>().Any(item => item.IsKeyboardFocusWithin))
+        {
+            return;
+        }
+
+        ThemePopup.IsOpen = false;
+    }
+
+    private void ThemeMenuButton_Click(object sender, RoutedEventArgs e)
+    {
+        ThemePopup.IsOpen = !ThemePopup.IsOpen;
+        if (ThemePopup.IsOpen)
+        {
+            ThemeMenuItems.Children.OfType<Button>().FirstOrDefault()?.Focus();
+        }
+    }
+
+    private void ThemeMenuButton_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Down or Key.Enter or Key.Space)
+        {
+            ThemePopup.IsOpen = true;
+            ThemeMenuItems.Children.OfType<Button>().FirstOrDefault()?.Focus();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            CloseThemeMenu();
+            ThemeMenuButton.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void ThemeMenuItem_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            CloseThemeMenu();
+            ThemeMenuButton.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void CloseThemeMenu()
+    {
+        _themeMenuCloseTimer.Stop();
+        ThemePopup.IsOpen = false;
+    }
+
     private void ThemeSwatch_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement element
@@ -65,22 +189,36 @@ public partial class MainWindow : Window
         _settings.Theme = theme;
         _settings.Save();
         RefreshThemeSwatches();
+        CloseThemeMenu();
     }
 
     private void RefreshThemeSwatches()
     {
-        HighlightSwatch(ThemeLightRing, ThemeManager.Current == AppTheme.Light);
-        HighlightSwatch(ThemeDarkRing, ThemeManager.Current == AppTheme.Dark);
-        HighlightSwatch(ThemeMintLightRing, ThemeManager.Current == AppTheme.MintLight);
-        HighlightSwatch(ThemeMintDeepRing, ThemeManager.Current == AppTheme.MintDeep);
-    }
-
-    private static void HighlightSwatch(Border ring, bool selected)
-    {
-        ring.BorderBrush = selected
-            ? (Brush)Application.Current.Resources["AccentBrush"]
-            : (Brush)Application.Current.Resources["BorderBrush"];
-        ring.BorderThickness = new Thickness(selected ? 3 : 2);
+        foreach (var item in ThemeMenuItems.Children.OfType<Button>())
+        {
+            var selected = AppThemeNames.TryParse(item.Tag as string, out var theme)
+                && theme == ThemeManager.Current;
+            item.Background = selected
+                ? (Brush)Application.Current.Resources["AccentSoftBrush"]
+                : Brushes.Transparent;
+            if (item.Content is StackPanel panel)
+            {
+                foreach (var child in panel.Children)
+                {
+                    if (child is Border ring)
+                    {
+                        ring.BorderBrush = selected
+                            ? (Brush)Application.Current.Resources["AccentBrush"]
+                            : (Brush)Application.Current.Resources["BorderBrush"];
+                        ring.BorderThickness = new Thickness(selected ? 2 : 1);
+                    }
+                    else if (child is TextBlock label)
+                    {
+                        label.Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"];
+                    }
+                }
+            }
+        }
     }
 
     private void About_Click(object sender, RoutedEventArgs e)

@@ -11,7 +11,7 @@ public sealed class AppSettings
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
+        Converters = { new AppThemeJsonConverter() }
     };
 
     public AppTheme Theme { get; set; } = AppTheme.Light;
@@ -55,5 +55,33 @@ public sealed class AppSettings
         }
 
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+    }
+}
+
+/// <summary>
+/// 读取主题枚举时，把已移除的「深薄荷」(MintDeep) 以及未知值安全回退为浅色，避免整份设置文件失败。
+/// </summary>
+public sealed class AppThemeJsonConverter : JsonConverter<AppTheme>
+{
+    public override AppTheme Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number
+            && reader.TryGetInt32(out var numeric)
+            && Enum.IsDefined((AppTheme)numeric))
+        {
+            return (AppTheme)numeric;
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return AppThemeNames.ParseOrFallback(reader.GetString());
+        }
+
+        return AppTheme.Light;
+    }
+
+    public override void Write(Utf8JsonWriter writer, AppTheme value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString());
     }
 }
