@@ -1,14 +1,16 @@
-# 使用 GITHUB_TOKEN 打包并上传 Velopack 资源。
-# 建议在推送 v* 标签，或在 Actions 里手动运行。
-# 不要在每次推送到 main 时自动发布。
+# 打包数据匹配助手。
 #
-# 从 1.2.0 起，打包使用 --msi --instLocation Either，并且不会把
-# Setup.exe / Portable.zip 作为对外安装程序上传。
-# 已安装 1.1.0 的用户仍从本仓库的 GitHub Releases 检查更新，
-# 因此 1.2.0 的更新包仍须发布到 GitHub。软件内 1.2.0 之后的检查改走 Gitee，
-# 需要另外把同样的更新文件发布到 https://gitee.com/seul-sc/DataMatchingAssistant
-# （版本 Release + 名为 latest 的 Release）。工作流不会使用 Gitee 令牌。
-name: Release Velopack
+# - 在 Actions 里手动运行（workflow_dispatch）= 试运行：只打包并把安装包作为 Actions 产物上传，
+#   不会创建或修改任何 GitHub / Gitee Release。可以在任何分支上运行。
+# - 推送 v* 标签 = 正式发布：额外把文件上传到对应的 GitHub Release。
+#
+# 1.3.0 起：
+#   * 正式安装包是 Inno Setup 打出的 DataMatchingAssistant-<版本>-Setup.exe（可自选安装目录）；
+#   * 软件通过 Gitee 仓库里的 update/version.json 检查更新，本工作流会生成对应的 version.json；
+#   * 另外打一个 Velopack「过渡包」（releases.win.json + full.nupkg），只给 1.1.0 / 1.2.0 老用户用：
+#     他们的软件只能收 Velopack 更新，过渡包启动后会引导他们改装 Inno 版本并自动删除旧版。
+# Gitee 发布（安装包附件、latest 里的过渡包、main 上的 update/version.json）需要另外完成，本工作流不使用 Gitee 令牌。
+name: Release
 
 on:
   workflow_dispatch:
@@ -20,8 +22,10 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     runs-on: windows-latest
+    env:
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,7 +48,7 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag matches project version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.IS_RELEASE == 'true'
         shell: bash
         run: |
           expected="${{ steps.get-version.outputs.version }}"
@@ -54,34 +58,68 @@ jobs:
             exit 1
           fi
 
-      - name: Publish application
+      - name: Run tests
+        run: dotnet test StudentScoreTool.slnx -c Release
+
+      - name: Publish application (Inno build)
         run: >
           dotnet publish StudentScoreTool/StudentScoreTool.csproj
           -c Release
           -r win-x64
           --self-contained true
           -p:PublishSingleFile=false
-          -o publish
+          -o build/publish
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --version=6.5.4 -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) { throw "未找到 ISCC.exe" }
+          (Get-Item $iscc).VersionInfo | Select-Object ProductVersion, FileName | Format-List
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build Inno installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get-version.outputs.version }}"
+          & $env:ISCC "/DAppVersion=$version" "/DPublishDir=..\build\publish" "/DOutputDir=..\release" "Installer\DataMatchingAssistant.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC 编译失败" }
+          ./scripts/New-UpdateManifest.ps1 -Version $version `
+            -Installer "release/DataMatchingAssistant-$version-Setup.exe" `
+            -OutFile "release/version.json"
+          Get-Content release/version.json
+          Get-ChildItem release | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: Publish application (Velopack bridge build for 1.1.0 / 1.2.0 users)
+        run: >
+          dotnet publish StudentScoreTool/StudentScoreTool.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=false
+          -p:VelopackBridge=true
+          -o build/publish-bridge
+
+      - name: Check the two builds differ only by Velopack
+        shell: pwsh
+        run: |
+          if (Test-Path "build/publish/Velopack.dll") { throw "正式（Inno）版本不应包含 Velopack.dll" }
+          if (-not (Test-Path "build/publish-bridge/Velopack.dll")) { throw "过渡包缺少 Velopack.dll" }
 
       - name: Install vpk
         run: dotnet tool install -g vpk --version 1.2.161
 
-      - name: Download previous Velopack release
-        continue-on-error: true
-        run: >
-          vpk download github
-          --repoUrl https://github.com/${{ github.repository }}
-          --token ${{ secrets.GITHUB_TOKEN }}
-          --outputDir Releases
-          --channel win
-
-      - name: Pack with Velopack
+      - name: Pack Velopack bridge
         # 关闭增量包：zstd 在处理中文文件名（如 数据匹配助手_ExecutionStub.exe）时会失败。
+        # 过渡包只用于老用户的软件内更新，不生成、也不发布 MSI / Setup.exe。
         run: >
           vpk pack
           --packId DataMatchingAssistant
           --packVersion ${{ steps.get-version.outputs.version }}
-          --packDir publish
+          --packDir build/publish-bridge
           --packTitle 数据匹配助手
           --packAuthors Seul_SC_照晨
           --mainExe DataMatchingAssistant.exe
@@ -90,30 +128,22 @@ jobs:
           --outputDir Releases
           --channel win
           --delta none
-          --msi
-          --instLocation Either
 
-      - name: Keep MSI as the advertised installer
+      - name: Keep only update files in the bridge output
         shell: pwsh
         run: |
-          $version = "${{ steps.get-version.outputs.version }}"
           $outputDir = "Releases"
-          $unpublishedDir = Join-Path $outputDir "unpublished-installers"
+          $unpublishedDir = "unpublished-installers"
           New-Item -ItemType Directory -Path $unpublishedDir -Force | Out-Null
           Get-ChildItem -Path $outputDir -File | Where-Object {
-            $_.Name -like "*Setup.exe" -or $_.Name -like "*Portable.zip"
+            $_.Name -like "*Setup.exe" -or $_.Name -like "*Portable.zip" -or $_.Name -like "*.msi"
           } | ForEach-Object {
             Move-Item -Path $_.FullName -Destination (Join-Path $unpublishedDir $_.Name) -Force
-          }
-          $msi = Get-ChildItem -Path $outputDir -File -Filter "*.msi" | Select-Object -First 1
-          $advertisedName = "DataMatchingAssistant-$version-Setup.msi"
-          if ($msi -and $msi.Name -ne $advertisedName) {
-            Copy-Item -Path $msi.FullName -Destination (Join-Path $outputDir $advertisedName) -Force
           }
           $assetsPath = Join-Path $outputDir "assets.win.json"
           if (Test-Path $assetsPath) {
             $raw = Get-Content -Path $assetsPath -Raw -Encoding UTF8
-            foreach ($name in @("Setup.exe", "Portable.zip")) {
+            foreach ($name in @("Setup.exe", "Portable.zip", ".msi")) {
               $raw = [regex]::Replace($raw, '(?s),\s*\{[^{}]*' + [regex]::Escape($name) + '[^{}]*\}', "")
               $raw = [regex]::Replace($raw, '(?s)\{\s*[^{}]*' + [regex]::Escape($name) + '[^{}]*\}\s*,', "")
             }
@@ -121,7 +151,26 @@ jobs:
           }
           Get-ChildItem $outputDir | Select-Object Name, Length | Format-Table -AutoSize
 
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataMatchingAssistant-${{ steps.get-version.outputs.version }}-installer
+          path: |
+            release/DataMatchingAssistant-${{ steps.get-version.outputs.version }}-Setup.exe
+            release/version.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Velopack bridge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DataMatchingAssistant-${{ steps.get-version.outputs.version }}-velopack-bridge
+          path: Releases/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload to GitHub Releases
+        if: env.IS_RELEASE == 'true'
         run: >
           vpk upload github
           --outputDir Releases
@@ -131,3 +180,12 @@ jobs:
           --publish
           --releaseName "数据匹配助手 ${{ steps.get-version.outputs.version }}"
           --tag ${{ steps.get-version.outputs.tag }}
+
+      - name: Attach Inno installer to GitHub Release
+        if: env.IS_RELEASE == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.get-version.outputs.version }}"
+          gh release upload "v$version" "release/DataMatchingAssistant-$version-Setup.exe" "release/version.json" --clobber --repo "${{ github.repository }}"

@@ -1,43 +1,34 @@
 <#
 .SYNOPSIS
-    打包数据匹配助手的 Velopack 发布文件，可选上传到 GitHub Releases。
+    在本机（Windows）打包数据匹配助手 1.3.0 起的发布文件，不上传任何东西。
 
 .DESCRIPTION
     在仓库根目录执行。脚本会：
     1. 从 csproj 读取版本号；
-    2. 发布 Windows x64 自包含目录（不是单文件，供 Velopack 打包）；
-    3. 尝试下载已有 GitHub Release 中的 Velopack 包，以便生成增量包；
-    4. 使用 vpk pack --msi --instLocation Either 生成 MSI 安装包、更新包和 releases.win.json；
-    5. 从待上传目录中去掉 Setup.exe 和 Portable.zip（对外只提供 MSI 安装程序）；
-    6. 若指定 -Upload，则使用 vpk upload github 发布。
+    2. 发布 Windows x64 自包含目录（build\publish），用 Inno Setup 打出
+       release\DataMatchingAssistant-<版本>-Setup.exe（安装时可点「浏览」自选目录）；
+    3. 生成 release\version.json（软件检查更新时读取，含 sha256 和大小）；
+    4. 除非指定 -SkipBridge，再用 -p:VelopackBridge=true 发布一份「过渡包」并用 vpk 打成
+       Releases\releases.win.json + Releases\DataMatchingAssistant-<版本>-full.nupkg，
+       只给 1.1.0 / 1.2.0（Velopack 安装）的老用户做最后一次软件内更新，引导他们改装 Inno 版本。
 
-    软件内更新源从 1.2.0 起改为 Gitee。本脚本仍把更新包上传到 GitHub，
-    以便已安装 1.1.0 的用户能检查到 1.2.0。请在打包完成后，再把同样的
-    更新文件（至少 releases.win.json 与 full/delta nupkg）以及 MSI
-    发布到 Gitee 仓库 https://gitee.com/seul-sc/DataMatchingAssistant ：
-    既要有版本标签（如 v1.2.0），也要维护名为 latest 的 Release，
-    因为应用会请求
-    https://gitee.com/seul-sc/DataMatchingAssistant/releases/download/latest/releases.win.json
-    本脚本不会使用或写入任何 Gitee 令牌。
-
-    首次把 1.0.0 的 Inno 安装用户升级到 Velopack 时，还没有旧的 Velopack 包，
-    下载步骤可能会失败，这是正常的，脚本会继续打出完整包。
+    上传由人工或 GitHub Actions（推送 v* 标签）完成，见 README「如何发布新版本」。
+    本脚本不会使用任何 GitHub / Gitee 令牌。
 
 .EXAMPLE
     .\scripts\Publish-Release.ps1
 
 .EXAMPLE
-    .\scripts\Publish-Release.ps1 -Upload -GitHubToken $env:GITHUB_TOKEN
+    .\scripts\Publish-Release.ps1 -SkipBridge -IsccPath "D:\Tools\Inno Setup 6\ISCC.exe"
 #>
 [CmdletBinding()]
 param(
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
     [string]$PackId = "DataMatchingAssistant",
-    [string]$RepoUrl = "https://github.com/Seul-SC/DataMatchingAssistant",
-    [string]$GitHubToken,
-    [switch]$Upload,
-    [switch]$SkipDownload
+    [string]$IsccPath,
+    [switch]$SkipTests,
+    [switch]$SkipBridge
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,45 +39,13 @@ function Assert-Command($Name) {
     }
 }
 
-function Prepare-ReleaseAssets {
-    param(
-        [Parameter(Mandatory = $true)][string]$OutputDir,
-        [Parameter(Mandatory = $true)][string]$PackId,
-        [Parameter(Mandatory = $true)][string]$Version
-    )
-
-    $unpublishedDir = Join-Path $OutputDir "unpublished-installers"
-    New-Item -ItemType Directory -Path $unpublishedDir -Force | Out-Null
-
-    Get-ChildItem -Path $OutputDir -File | Where-Object {
-        $_.Name -like "*Setup.exe" -or $_.Name -like "*Portable.zip"
-    } | ForEach-Object {
-        Write-Host "不作为对外安装程序发布，已移走：$($_.Name)"
-        Move-Item -Path $_.FullName -Destination (Join-Path $unpublishedDir $_.Name) -Force
+function Invoke-Publish([string]$OutputDir, [string[]]$ExtraArgs) {
+    if (Test-Path $OutputDir) {
+        Remove-Item $OutputDir -Recurse -Force
     }
-
-    $msi = Get-ChildItem -Path $OutputDir -File -Filter "*.msi" | Select-Object -First 1
-    $advertisedName = "$PackId-$Version-Setup.msi"
-    if ($msi -and $msi.Name -ne $advertisedName) {
-        $destination = Join-Path $OutputDir $advertisedName
-        Copy-Item -Path $msi.FullName -Destination $destination -Force
-        Write-Host "已复制 MSI 为 $advertisedName"
-    }
-
-    $assetsPath = Join-Path $OutputDir "assets.win.json"
-    if (Test-Path $assetsPath) {
-        $raw = Get-Content -Path $assetsPath -Raw -Encoding UTF8
-        foreach ($name in @("Setup.exe", "Portable.zip")) {
-            $raw = [regex]::Replace(
-                $raw,
-                '(?s),\s*\{[^{}]*' + [regex]::Escape($name) + '[^{}]*\}',
-                "")
-            $raw = [regex]::Replace(
-                $raw,
-                '(?s)\{\s*[^{}]*' + [regex]::Escape($name) + '[^{}]*\}\s*,',
-                "")
-        }
-        Set-Content -Path $assetsPath -Value $raw -Encoding UTF8
+    & dotnet publish $csproj -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=false -o $OutputDir @ExtraArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet publish 失败。"
     }
 }
 
@@ -96,132 +55,96 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
 $csproj = Join-Path $repoRoot "StudentScoreTool\StudentScoreTool.csproj"
-if (-not (Test-Path $csproj)) {
-    throw "未找到项目文件：$csproj"
-}
-
 [xml]$project = Get-Content $csproj
 $version = $project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($version)) {
     throw "无法从 csproj 读取 <Version>。"
 }
 
-$tag = "v$version"
 $publishDir = Join-Path $repoRoot "build\publish"
-$outputDir = Join-Path $repoRoot "Releases"
-$iconPath = Join-Path $repoRoot "StudentScoreTool\Assets\app.ico"
-$notesPath = Join-Path $repoRoot "packaging\release-notes.md"
-$mainExe = "DataMatchingAssistant.exe"
+$bridgePublishDir = Join-Path $repoRoot "build\publish-bridge"
+$releaseDir = Join-Path $repoRoot "release"
+$bridgeOutputDir = Join-Path $repoRoot "Releases"
+$installer = Join-Path $releaseDir "$PackId-$version-Setup.exe"
 
-if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
-    Write-Host "正在安装与项目一致的 vpk 1.2.161 ..."
-    dotnet tool install -g vpk --version 1.2.161
+if (-not $SkipTests) {
+    Write-Host "运行测试..."
+    & dotnet test (Join-Path $repoRoot "StudentScoreTool.slnx") -c $Configuration
+    if ($LASTEXITCODE -ne 0) {
+        throw "测试没有通过。"
+    }
 }
 
-$toolRoot = Join-Path $env:USERPROFILE ".dotnet\tools"
-if (Test-Path $toolRoot) {
-    $env:PATH = "$toolRoot;$env:PATH"
+if ([string]::IsNullOrWhiteSpace($IsccPath)) {
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+    )
+    $IsccPath = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 }
-
-Assert-Command vpk
-
-if (Test-Path $publishDir) {
-    Remove-Item $publishDir -Recurse -Force
+if ([string]::IsNullOrWhiteSpace($IsccPath) -or -not (Test-Path $IsccPath)) {
+    throw "未找到 Inno Setup 6 的 ISCC.exe。请先安装 Inno Setup 6（https://jrsoftware.org/isdl.php），或用 -IsccPath 指定。"
 }
 
 Write-Host "发布 $PackId $version 到 $publishDir"
-dotnet publish $csproj `
-    -c $Configuration `
-    -r $Runtime `
-    --self-contained true `
-    -p:PublishSingleFile=false `
-    -o $publishDir
+Invoke-Publish $publishDir @()
 
+New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+Write-Host "使用 Inno Setup 打包..."
+& $IsccPath "/DAppVersion=$version" "/DPublishDir=$publishDir" "/DOutputDir=$releaseDir" (Join-Path $repoRoot "Installer\DataMatchingAssistant.iss")
 if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish 失败。"
+    throw "ISCC 编译失败。"
 }
 
-New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+& (Join-Path $PSScriptRoot "New-UpdateManifest.ps1") -Version $version -Installer $installer -OutFile (Join-Path $releaseDir "version.json")
 
-if (-not $SkipDownload) {
-    Write-Host "尝试从 GitHub Releases 下载已有 Velopack 包，以便生成增量更新..."
-    $downloadArgs = @(
-        "download", "github",
-        "--repoUrl", $RepoUrl,
-        "--outputDir", $outputDir,
-        "--channel", "win"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($GitHubToken)) {
-        $downloadArgs += @("--token", $GitHubToken)
+if (-not $SkipBridge) {
+    if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
+        Write-Host "正在安装与项目一致的 vpk 1.2.161 ..."
+        dotnet tool install -g vpk --version 1.2.161
+        $toolRoot = Join-Path $env:USERPROFILE ".dotnet\tools"
+        if (Test-Path $toolRoot) {
+            $env:PATH = "$toolRoot;$env:PATH"
+        }
     }
+    Assert-Command vpk
 
-    & vpk @downloadArgs
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "下载已有 Release 失败（若这是第一个 Velopack 版本，可忽略）。将只生成完整更新包。"
+    Write-Host "发布 Velopack 过渡包到 $bridgePublishDir"
+    Invoke-Publish $bridgePublishDir @("-p:VelopackBridge=true")
+
+    if (Test-Path $bridgeOutputDir) {
+        Remove-Item $bridgeOutputDir -Recurse -Force
     }
-}
-
-# 关闭增量包：zstd 在处理中文文件名（如 数据匹配助手_ExecutionStub.exe）时会失败。
-$packArgs = @(
-    "pack",
-    "--packId", $PackId,
-    "--packVersion", $version,
-    "--packDir", $publishDir,
-    "--packTitle", "数据匹配助手",
-    "--packAuthors", "Seul_SC_照晨",
-    "--mainExe", $mainExe,
-    "--icon", $iconPath,
-    "--outputDir", $outputDir,
-    "--channel", "win",
-    "--delta", "none",
-    "--msi",
-    "--instLocation", "Either"
-)
-
-if (Test-Path $notesPath) {
-    $packArgs += @("--releaseNotes", $notesPath)
-}
-
-Write-Host "正在使用 Velopack 打包（含 MSI）..."
-& vpk @packArgs
-if ($LASTEXITCODE -ne 0) {
-    throw "vpk pack 失败。"
-}
-
-Prepare-ReleaseAssets -OutputDir $outputDir -PackId $PackId -Version $version
-
-Write-Host ""
-Write-Host "打包完成。请把 Releases 目录中的这些文件上传到 GitHub Release $tag（1.1.0 用户仍从 GitHub 更新）："
-Write-Host "  - releases.win.json                 （必须，更新检查依赖此文件）"
-Write-Host "  - $PackId-$version-full.nupkg       （必须，完整更新包）"
-Write-Host "  - $PackId-$version-delta.nupkg      （如有，增量更新包）"
-Write-Host "  - $PackId-$version-Setup.msi        （必须，给新用户的安装程序；不要上传 Setup.exe）"
-Write-Host "  - RELEASES                          （如有，建议一并上传）"
-Write-Host "  - assets.win.json                   （建议上传，vpk upload 会用到）"
-Write-Host ""
-Write-Host "请同时把上述更新文件和 MSI 发布到 Gitee 的版本 Release，以及名为 latest 的 Release。"
-Write-Host "不要上传 Setup.exe 或 Portable.zip 作为对外安装程序。"
-Write-Host "版本号、安装包和 GitHub / Gitee tag 必须一致，例如 $version / $tag 。"
-Get-ChildItem $outputDir | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
-
-if ($Upload) {
-    if ([string]::IsNullOrWhiteSpace($GitHubToken)) {
-        throw "使用 -Upload 时必须提供 -GitHubToken，或先设置环境变量后再传入。"
-    }
-
-    Write-Host "正在上传到 GitHub Releases（$tag）..."
-    & vpk upload github `
-        --outputDir $outputDir `
+    # 关闭增量包：zstd 在处理中文文件名（如 数据匹配助手_ExecutionStub.exe）时会失败。
+    & vpk pack `
+        --packId $PackId `
+        --packVersion $version `
+        --packDir $bridgePublishDir `
+        --packTitle 数据匹配助手 `
+        --packAuthors Seul_SC_照晨 `
+        --mainExe DataMatchingAssistant.exe `
+        --icon (Join-Path $repoRoot "StudentScoreTool\Assets\app.ico") `
+        --releaseNotes (Join-Path $repoRoot "packaging\release-notes.md") `
+        --outputDir $bridgeOutputDir `
         --channel win `
-        --repoUrl $RepoUrl `
-        --token $GitHubToken `
-        --publish `
-        --releaseName "数据匹配助手 $version" `
-        --tag $tag
-
+        --delta none
     if ($LASTEXITCODE -ne 0) {
-        throw "vpk upload github 失败。"
+        throw "vpk pack 失败。"
     }
 
-    Write-Host "上传完成。请在 GitHub 上确认 Release 已公开，并且包含 releases.win.json 和 MSI，且没有把 Setup.exe / Portable.zip 作为安装程序。"
+    # 过渡包只用于软件内更新，不对外提供 Setup.exe / Portable.zip。
+    Get-ChildItem -Path $bridgeOutputDir -File | Where-Object {
+        $_.Name -like "*Setup.exe" -or $_.Name -like "*Portable.zip"
+    } | Remove-Item -Force
 }
+
+Write-Host ""
+Write-Host "打包完成："
+Write-Host "  release\$PackId-$version-Setup.exe   （给所有用户的安装包）"
+Write-Host "  release\version.json                 （发版时放到仓库 update\version.json）"
+if (-not $SkipBridge) {
+    Write-Host "  Releases\releases.win.json           （过渡包，给 1.1.0 / 1.2.0 老用户）"
+    Write-Host "  Releases\$PackId-$version-full.nupkg"
+}
+Get-ChildItem $releaseDir | Select-Object Name, Length | Format-Table -AutoSize

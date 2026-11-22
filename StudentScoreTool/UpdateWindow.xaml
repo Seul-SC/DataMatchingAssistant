@@ -19,7 +19,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,14">
-            <TextBlock Text="发现新版本" FontSize="21" FontWeight="SemiBold"
+            <TextBlock x:Name="HeaderTextBlock" Text="发现新版本" FontSize="21" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}"/>
             <TextBlock x:Name="SummaryTextBlock" Margin="0,8,0,0" FontSize="13"
                        TextWrapping="Wrap"
@@ -47,7 +47,7 @@
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button x:Name="LaterButton" Content="稍后" Width="100" Height="36"
                     Margin="0,0,10,0" IsCancel="True" Click="Later_Click"/>
-            <Button x:Name="UpdateButton" Content="立即更新" Width="132" Height="36"
+            <Button x:Name="UpdateButton" Content="更新" Width="132" Height="36"
                     Style="{StaticResource PrimaryButton}"
                     IsDefault="True" Click="Update_Click"/>
         </StackPanel>

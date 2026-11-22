@@ -2,7 +2,7 @@
 
 一个本地运行的 Windows 表格数据匹配工具。选择包含成绩的 Excel 工作簿和需要填写的名单工作簿，软件会匹配学生，并将成绩写入名单表已有的成绩列。
 
-当前版本：1.2.0  
+当前版本：1.3.0  
 作者：Seul_SC_照晨  
 仓库：https://github.com/Seul-SC/DataMatchingAssistant  
 Gitee：https://gitee.com/seul-sc/DataMatchingAssistant
@@ -33,20 +33,40 @@ Gitee：https://gitee.com/seul-sc/DataMatchingAssistant
 
 支持 `.xlsx`、`.xls` 和 `.csv` 文件，适用于 Windows 10/11 x64。
 
+## 安装
+
+从 [Gitee 发行版](https://gitee.com/seul-sc/DataMatchingAssistant/releases)（国内更快）或 [GitHub Releases](https://github.com/Seul-SC/DataMatchingAssistant/releases) 下载 `DataMatchingAssistant-<版本>-Setup.exe`，双击运行：
+
+1. 开头可以选择「只为我安装」（不需要管理员权限）或「为所有用户安装」。
+2. 在「选择安装位置」这一页点「浏览」，可以装到任意文件夹，例如 `D:\数据匹配助手`。
+3. 可以勾选创建桌面快捷方式。安装完成后即可启动。
+
+以后再运行新版安装包（包括软件内更新）时，会自动沿用上次选择的文件夹。卸载可在「设置 → 应用」中找到「数据匹配助手」。
+
 ## 检查更新
 
-从 1.2.0 起，软件使用 [Velopack](https://docs.velopack.io/) 从 Gitee Releases 检查和安装后续更新。更新源为：
+从 1.3.0 起，软件不再使用 Velopack，而是读取 Gitee 仓库中的 [`update/version.json`](update/version.json) 来检查更新：
 
-`https://gitee.com/seul-sc/DataMatchingAssistant/releases/download/latest`
+`https://gitee.com/seul-sc/DataMatchingAssistant/raw/main/update/version.json`
 
-请在该地址对应的 `latest` Release 中放好 `releases.win.json` 和更新包。已安装 1.1.0 的用户仍然从本仓库的 GitHub Releases 检查更新，因此每次发版也要把同样的更新文件发到 GitHub。
+（Gitee 无法访问时，改读 GitHub 仓库里的同一个文件。）
 
 - 启动时只在后台检查，如果有新版本，会在「检查更新」按钮上显示小红点，不会自动弹出窗口。
-- 点击「检查更新」后：如果已是最新版本，会直接提示；如果有新版本，会显示更新说明，再由用户点击「立即更新」，软件会下载更新包、安装并重启。
-- 检查更新时只向 Gitee 查询版本信息和安装包地址，不会上传学生表格。
-- 已经安装 1.0.0（Inno Setup 安装包）的用户，需要先手动安装一次 1.1.0 或 1.2.0 的 Velopack 安装程序。之后即可在软件内一键更新。
-- 已经安装 1.1.0 的用户，在软件里更新到 1.2.0 后，仍会留在原来的文件夹（通常是 `%LocalAppData%\DataMatchingAssistant`）。如果要换到其他磁盘，需要再运行一次 1.2.0 的 MSI。
-- 直接用 `dotnet run` 或在开发目录里运行时，不是已安装版本，无法在线更新。
+- 点击「检查更新」后：如果已是最新版本，会直接提示；如果有新版本，会显示版本号和更新说明，点「更新」后软件把新的安装包下载到临时文件夹，校验 SHA-256 后打开安装向导，并关闭自己。安装向导会沿用原来的安装目录，按提示完成即可。
+- 网络不通、文件校验不通过时，会给出中文提示，也可以到 Gitee 发行版页手动下载。
+- 检查更新时只向 Gitee（或 GitHub）读取版本信息和安装包，不会上传学生表格。
+
+### 从 1.1.0 / 1.2.0 升级
+
+1.1.0 和 1.2.0 是用 Velopack 安装的，它们只能接收 Velopack 格式的更新：1.1.0 从 GitHub Releases 检查，1.2.0 从 Gitee 的 `latest` 发行版检查。为了让这些用户不用手动卸载，1.3.0 额外提供一个 **Velopack 过渡包**（用 `-p:VelopackBridge=true` 编译，保留 Velopack 钩子）：
+
+1. 老用户在软件里点更新，收到的是 1.3.0 过渡包。
+2. 过渡包第一次启动时，会提示「新版改用新的安装方式，可自选安装目录」。点「下载并安装」后，下载 Inno 安装包并打开安装向导（选「稍后」也行，「检查更新」上会一直显示小红点，随时可以再点）。
+3. 安装向导在复制新文件之前，会自动卸载旧版：Setup.exe 装的旧版用旧版自带的 `Update.exe --uninstall` 删除，MSI 装的旧版用 `msiexec /x` 删除。旧版所在文件夹不能被选作新安装目录。
+4. 设置会先从 `%LocalAppData%\DataMatchingAssistant\settings.json` 复制到新位置 `%AppData%\DataMatchingAssistant\settings.json`，所以主题和最近文件都会保留。
+5. 万一旧版没能自动删除（例如给所有用户安装的 MSI 需要管理员权限而被取消），安装结束时会提示用户到「设置 → 应用」里手动卸载旧版。新版本不受影响。
+
+已经安装 1.0.0（旧的 Inno 安装包）的用户，直接运行 1.3.0 安装包即可覆盖升级。
 
 ## 开发环境
 
@@ -54,7 +74,8 @@ Gitee：https://gitee.com/seul-sc/DataMatchingAssistant
 - C# / WPF
 - ClosedXML
 - ExcelDataReader（用于读取 `.xls`）
-- Velopack 1.2.161
+- Inno Setup 6（打安装包）
+- Velopack 1.2.161（仅用于给老用户的过渡包）
 
 还原依赖并运行测试：
 
@@ -69,90 +90,42 @@ dotnet test StudentScoreTool.slnx
 dotnet run --project StudentScoreTool/StudentScoreTool.csproj
 ```
 
-主题、上次打开的文件路径保存在 `%LocalAppData%\DataMatchingAssistant\settings.json`，不会放在安装目录的 `current` 文件夹里，以免更新时被覆盖。
+主题、上次打开的文件路径保存在 `%AppData%\DataMatchingAssistant\settings.json`，与安装目录无关。1.2.0 及更早版本放在 `%LocalAppData%\DataMatchingAssistant\settings.json`，新版启动时会自动搬过来。
 
 ## 如何发布新版本
 
-发布前，请把下面三处的版本号改成同一个值，例如软件版本 `1.2.0`，GitHub / Gitee 标签 `v1.2.0`：
+发布前，请把下面几处的版本号改成同一个值，例如软件版本 `1.3.0`，标签 `v1.3.0`：
 
 1. `StudentScoreTool/StudentScoreTool.csproj` 中的 `<Version>`（以及 `AssemblyVersion`、`FileVersion`）
-2. `packaging/release-notes.md` 中的更新说明（会写入更新包，并显示在「检查更新」窗口）
-3. 即将创建的 GitHub Release 标签，例如 `v1.2.0`；同时在 Gitee 创建对应版本 Release，并更新名为 `latest` 的 Release
+2. `packaging/release-notes.md` 中的更新说明（会写进 version.json 和过渡包，并显示在「检查更新」窗口）
 
-### 本机打包
+### 打包
 
-在 Windows 上、仓库根目录执行：
-
-```powershell
-# 如尚未安装与项目一致的命令行工具
-dotnet tool install -g vpk --version 1.2.161
-
-# 只打包，稍后手动上传
-.\scripts\Publish-Release.ps1
-
-# 或打包并直接发布到 GitHub（需要有仓库写入权限的 token）
-.\scripts\Publish-Release.ps1 -Upload -GitHubToken $env:GITHUB_TOKEN
-```
-
-脚本会执行 `dotnet publish`（Windows x64 自包含目录，**不要**再用单文件发布），然后调用 `vpk pack --msi --instLocation Either`。如果 GitHub 上已有旧的 Velopack 包，还会先下载以便生成增量包。脚本不会上传 Setup.exe 或便携版 zip。Gitee 发布需要另行手动完成，不要把 Gitee 令牌写进仓库。
-
-也可以手工执行同样的步骤：
+- **GitHub Actions 试运行**：在 Actions 里手动运行「Release」工作流（可选任意分支）。它会跑测试、打出 Inno 安装包、生成 `version.json`、打出 Velopack 过渡包，并作为 Actions 产物上传，**不会**创建或修改任何 Release。
+- **GitHub Actions 正式发布**：推送 `v*` 标签。除了上面的步骤，还会把过渡包（`releases.win.json`、`full.nupkg` 等）、Inno 安装包和 `version.json` 上传到对应的 GitHub Release。
+- **本机打包**（Windows，需要安装 Inno Setup 6）：
 
 ```powershell
-dotnet publish StudentScoreTool/StudentScoreTool.csproj `
-  -c Release `
-  -r win-x64 `
-  --self-contained true `
-  -p:PublishSingleFile=false `
-  -o build/publish
-
-vpk pack `
-  --packId DataMatchingAssistant `
-  --packVersion 1.2.0 `
-  --packDir .\build\publish `
-  --packTitle 数据匹配助手 `
-  --packAuthors Seul_SC_照晨 `
-  --mainExe DataMatchingAssistant.exe `
-  --icon .\StudentScoreTool\Assets\app.ico `
-  --releaseNotes .\packaging\release-notes.md `
-  --outputDir .\Releases `
-  --channel win `
-  --msi `
-  --instLocation Either
+.\scripts\Publish-Release.ps1            # 只打包，不上传
+.\scripts\Publish-Release.ps1 -SkipBridge # 不再需要过渡包时
 ```
 
-### 必须上传的文件
+产物：
 
-`vpk pack` 会在 `Releases` 目录中生成一组文件。请把它们上传到 GitHub 对应标签的 Release，**尤其不要漏掉更新源文件**；同时把同样的更新文件和 MSI 发布到 Gitee 的版本 Release 以及 `latest` Release：
+| 文件 | 用途 |
+| --- | --- |
+| `release/DataMatchingAssistant-1.3.0-Setup.exe` | 给所有用户的安装包，上传到 GitHub 和 Gitee 的版本发行版。 |
+| `release/version.json` | 含版本号、更新说明、下载地址、SHA-256 和大小。安装包上传好以后，再放到仓库的 `update/version.json`。 |
+| `Releases/releases.win.json`、`Releases/DataMatchingAssistant-1.3.0-full.nupkg`（以及 `RELEASES`、`assets.win.json`） | Velopack 过渡包，只给 1.1.0 / 1.2.0 老用户。 |
 
-| 文件 | 是否必须 | 说明 |
-| --- | --- | --- |
-| `releases.win.json` | 必须 | Velopack 发现新版本的唯一依据。缺少它时，用户检查更新会认为没有新版本。 |
-| `DataMatchingAssistant-1.2.0-full.nupkg` | 必须 | 完整更新包。文件名中的版本号随每次发布变化。 |
-| `DataMatchingAssistant-1.2.0-delta.nupkg` | 建议 | 增量更新包。只有本地同时有上一版完整包时才会生成。 |
-| `DataMatchingAssistant-1.2.0-Setup.msi` | 必须（给新用户） | 对外安装程序。请使用 MSI，不要再把 Setup.exe 或 Portable.zip 作为安装程序发布。 |
-| `assets.win.json` | 建议 | 供 `vpk upload` 识别本次要上传的文件。手动上传时也可以一并带上。 |
-| `RELEASES` | 建议 | 部分更新源仍会用到，建议一并上传。 |
+### 发布顺序（重要）
 
-如果使用 `.\scripts\Publish-Release.ps1 -Upload` 或下面的 GitHub Actions，这些文件会由 `vpk upload github` 自动上传并发布。请确认 Release 不是草稿，否则已安装的用户看不到更新。不要把 Setup.exe 或 Portable.zip 作为对外安装程序上传。
+1. 推送 `v1.3.0` 标签，等 Actions 跑完，确认 GitHub Release 有安装包和过渡包（1.1.0 用户从这里收到过渡包）。
+2. 在 Gitee 创建 `v1.3.0` 发行版，上传 `DataMatchingAssistant-1.3.0-Setup.exe`。
+3. 把 Gitee `latest` 发行版里的 Velopack 文件换成 1.3.0 过渡包的 `releases.win.json`、`full.nupkg`、`RELEASES`（1.2.0 用户从这里收到过渡包）。
+4. 最后把 Actions 生成的 `version.json` 提交到 `update/version.json`，并推送到 GitHub 和 Gitee 的 main。只有这一步完成后，1.3.0 及以后的用户（以及过渡包）才会看到新安装包，所以务必先上传安装包。
 
-上传后，已安装 1.1.0 的用户可从 GitHub 检查到 1.2.0；从 1.2.0 起，软件会改向 Gitee 检查后续版本。
-
-### 使用 GitHub Actions
-
-仓库包含 `.github/workflows/release.yml`。它会在推送 `v*` 标签，或在 Actions 中手动运行时：
-
-1. 从 csproj 读取版本号（若由标签触发，还会校验标签与版本一致）
-2. 发布 Windows 自包含目录
-3. 尝试下载上一版 Velopack 包
-4. 使用 `vpk` 1.2.161 打包，并加上 `--msi --instLocation Either`
-5. 移走 Setup.exe 和 Portable.zip 后，用 `GITHUB_TOKEN` 上传并发布 GitHub Release
-
-工作流已授予 `contents: write` 权限，不需要额外密钥。Gitee 发布需要另外手动完成。
-
-### 关于旧的 Inno Setup 安装脚本
-
-`Installer/DataMatchingAssistant.iss` 仍保留，供参考，但 **已不再作为受支持的安装方式**。1.2.0 起请改用 Velopack MSI。用 Inno 安装的版本无法使用软件内的一键更新。
+以后（1.3.1 起）只需要第 1、2、4 步：Gitee `latest` 里的过渡包保持 1.3.0 不动，让仍停留在旧版的用户继续能换到新安装方式。不再需要过渡包时，可以用 `-SkipBridge` 或删掉工作流里的过渡包步骤。
 
 `build`、`dist`、`release`、`Releases`、`publish` 和各项目的 `bin`、`obj` 目录不会提交到源码仓库。
 
@@ -161,9 +134,10 @@ vpk pack `
 ```text
 StudentScoreTool/          WPF 应用、主题、更新和 Excel 处理逻辑
 StudentScoreTool.Tests/    自动化测试
-Installer/                 旧的 Inno Setup 安装脚本（已不再作为推荐发布方式）
+Installer/                 Inno Setup 安装脚本（1.3.0 起的正式安装方式）
 packaging/                 发给用户的更新说明
-scripts/                   本机打包脚本
-.github/workflows/         使用 GITHUB_TOKEN 发布 Velopack 资源的工作流
+scripts/                   本机打包脚本、生成 version.json 的脚本
+update/version.json        软件检查更新时读取的版本信息
+.github/workflows/         打包（试运行）和发布到 GitHub Release 的工作流
 StudentScoreTool.slnx      解决方案
 ```

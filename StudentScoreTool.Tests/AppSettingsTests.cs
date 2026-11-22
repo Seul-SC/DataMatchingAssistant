@@ -77,14 +77,39 @@ public sealed class AppSettingsTests : IDisposable
     }
 
     [Fact]
-    public void DefaultPathLivesUnderLocalAppDataAndNotTheInstallFolder()
+    public void DefaultPathLivesUnderRoamingAppDataAndNotTheOldVelopackFolder()
     {
         var expectedRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "DataMatchingAssistant");
 
-        Assert.True(AppSettings.DefaultPath.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase));
+        Assert.StartsWith(expectedRoot, AppSettings.DefaultPath, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("settings.json", Path.GetFileName(AppSettings.DefaultPath));
+        Assert.NotEqual(AppSettings.LegacyPath, AppSettings.DefaultPath);
+    }
+
+    [Fact]
+    public void MigrateLegacyFileCopiesOnlyWhenNewFileIsMissing()
+    {
+        var legacy = Path.Combine(_directory, "old", "settings.json");
+        var modern = Path.Combine(_directory, "new", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacy)!);
+        new AppSettings { Theme = AppTheme.Accompany }.Save(legacy);
+
+        Assert.True(AppSettings.MigrateLegacyFile(legacy, modern));
+        Assert.Equal(AppTheme.Accompany, AppSettings.Load(modern).Theme);
+
+        new AppSettings { Theme = AppTheme.Dark }.Save(legacy);
+        Assert.False(AppSettings.MigrateLegacyFile(legacy, modern));
+        Assert.Equal(AppTheme.Accompany, AppSettings.Load(modern).Theme);
+    }
+
+    [Fact]
+    public void MigrateLegacyFileIgnoresMissingLegacyFile()
+    {
+        var modern = Path.Combine(_directory, "new2", "settings.json");
+        Assert.False(AppSettings.MigrateLegacyFile(Path.Combine(_directory, "nope.json"), modern));
+        Assert.False(File.Exists(modern));
     }
 
     public void Dispose()

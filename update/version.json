@@ -1,0 +1,6 @@
+{
+  "version": "1.3.0",
+  "notes": "安装时可以点「浏览」，把软件装到任意文件夹（比如 D 盘）；再次安装或更新时会自动沿用上次的位置。\n检查更新改为读取 Gitee 上的版本信息，发现新版本时下载新的安装包并打开安装向导，国内下载更快。",
+  "url": "https://gitee.com/seul-sc/DataMatchingAssistant/releases/download/v1.3.0/DataMatchingAssistant-1.3.0-Setup.exe",
+  "fallbackUrl": "https://github.com/Seul-SC/DataMatchingAssistant/releases/download/v1.3.0/DataMatchingAssistant-1.3.0-Setup.exe"
+}

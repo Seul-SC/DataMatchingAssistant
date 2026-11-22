@@ -29,6 +29,8 @@ public partial class MainWindow : Window
     private string? _lastIssueIntro;
     private IReadOnlyList<Uri> _lastIssueStickers = [];
     private UpdateCheckResult? _pendingUpdate;
+    /// <summary>过渡包从旧版 Velopack 安装里运行时的安装根目录；正式 Inno 版本为 null。</summary>
+    private readonly string? _legacyVelopackRoot = LegacyInstall.CurrentBridgeRoot;
     private readonly DispatcherTimer _themeMenuCloseTimer = new()
     {
         Interval = TimeSpan.FromMilliseconds(220)
@@ -265,6 +267,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        var isMigration = _legacyVelopackRoot is not null;
         _isCheckingUpdate = true;
         var previousContent = CheckUpdateButton.Content;
         if (showWindow)
@@ -275,24 +278,38 @@ public partial class MainWindow : Window
 
         try
         {
-            var result = await _updateService.CheckForUpdatesAsync();
+            // 旧版过渡包：即使版本号相同，也要引导改装 Inno 版本。
+            var result = await _updateService.CheckForUpdatesAsync(includeSameVersion: isMigration);
             _pendingUpdate = result.Availability == UpdateAvailability.Available ? result : null;
-            UpdateBadge.Visibility = _pendingUpdate is null ? Visibility.Collapsed : Visibility.Visible;
+            UpdateBadge.Visibility = _pendingUpdate is not null || isMigration
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
-            if (!showWindow)
+            // 启动时只亮红点、不弹窗；唯一例外是旧版用户第一次打开过渡包时，自动说明一次新的安装方式。
+            var autoPrompt = !showWindow
+                && isMigration
+                && _pendingUpdate is not null
+                && !_settings.MigrationPromptShown;
+            if (!showWindow && !autoPrompt)
             {
                 return;
             }
 
-            if (result.Availability == UpdateAvailability.Available
-                && result.Update is not null
-                && result.Manager is not null)
+            if (autoPrompt)
             {
-                var dialog = new UpdateWindow(result, _updateService) { Owner = this };
+                _settings.MigrationPromptShown = true;
+                TrySaveSettings();
+            }
+
+            if (result.Availability == UpdateAvailability.Available && result.Manifest is not null)
+            {
+                var dialog = new UpdateWindow(result, _updateService, _legacyVelopackRoot) { Owner = this };
                 dialog.ShowDialog();
                 if (dialog.StartedUpdate)
                 {
                     _isApplyingUpdate = true;
+                    TrySaveSettings();
+                    Application.Current.Shutdown();
                 }
                 return;
             }
@@ -300,13 +317,31 @@ public partial class MainWindow : Window
             var icon = result.Availability == UpdateAvailability.Error
                 ? MessageBoxImage.Warning
                 : MessageBoxImage.Information;
-            MessageBox.Show(this, result.Message, "检查更新", MessageBoxButton.OK, icon);
+            var message = result.Message;
+            if (isMigration && result.Availability == UpdateAvailability.UpToDate)
+            {
+                message = $"暂时还拿不到新的安装包，请稍后再试，或到 Gitee 发布页手动下载：{AppInfo.GiteeReleasesUrl}";
+            }
+
+            MessageBox.Show(this, message, "检查更新", MessageBoxButton.OK, icon);
         }
         finally
         {
             _isCheckingUpdate = false;
             CheckUpdateButton.Content = previousContent;
             CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private void TrySaveSettings()
+    {
+        try
+        {
+            _settings.Save();
+        }
+        catch
+        {
+            // 设置保存失败不影响更新。
         }
     }
 
