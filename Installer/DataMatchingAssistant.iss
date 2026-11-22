@@ -181,7 +181,7 @@ begin
   if FileExists(OldFile) and not FileExists(NewFile) then
   begin
     ForceDirectories(ExtractFileDir(NewFile));
-    if FileCopy(OldFile, NewFile, True) then
+    if CopyFile(OldFile, NewFile, True) then
       Log('已把旧版设置复制到 ' + NewFile)
     else
       Log('复制旧版设置失败：' + OldFile);

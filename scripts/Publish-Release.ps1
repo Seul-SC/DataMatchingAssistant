@@ -84,7 +84,7 @@ if ([string]::IsNullOrWhiteSpace($IsccPath)) {
     $IsccPath = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 }
 if ([string]::IsNullOrWhiteSpace($IsccPath) -or -not (Test-Path $IsccPath)) {
-    throw "未找到 Inno Setup 6 的 ISCC.exe。请先安装 Inno Setup 6（https://jrsoftware.org/isdl.php），或用 -IsccPath 指定。"
+    throw "未找到 Inno Setup 6 的 ISCC.exe。请先安装 Inno Setup 6.5 或更新版本（https://jrsoftware.org/isdl.php），或用 -IsccPath 指定。"
 }
 
 Write-Host "发布 $PackId $version 到 $publishDir"

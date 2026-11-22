@@ -74,7 +74,7 @@ Gitee：https://gitee.com/seul-sc/DataMatchingAssistant
 - C# / WPF
 - ClosedXML
 - ExcelDataReader（用于读取 `.xls`）
-- Inno Setup 6（打安装包）
+- Inno Setup 6.5+（打安装包）
 - Velopack 1.2.161（仅用于给老用户的过渡包）
 
 还原依赖并运行测试：
@@ -103,7 +103,7 @@ dotnet run --project StudentScoreTool/StudentScoreTool.csproj
 
 - **GitHub Actions 试运行**：在 Actions 里手动运行「Release」工作流（可选任意分支）。它会跑测试、打出 Inno 安装包、生成 `version.json`、打出 Velopack 过渡包，并作为 Actions 产物上传，**不会**创建或修改任何 Release。
 - **GitHub Actions 正式发布**：推送 `v*` 标签。除了上面的步骤，还会把过渡包（`releases.win.json`、`full.nupkg` 等）、Inno 安装包和 `version.json` 上传到对应的 GitHub Release。
-- **本机打包**（Windows，需要安装 Inno Setup 6）：
+- **本机打包**（Windows，需要安装 Inno Setup 6.5 或更新版本）：
 
 ```powershell
 .\scripts\Publish-Release.ps1            # 只打包，不上传
