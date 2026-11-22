@@ -76,6 +76,7 @@ jobs:
           --channel win
 
       - name: Pack with Velopack
+        # 关闭增量包：zstd 在处理中文文件名（如 数据匹配助手_ExecutionStub.exe）时会失败。
         run: >
           vpk pack
           --packId DataMatchingAssistant
@@ -88,6 +89,7 @@ jobs:
           --releaseNotes packaging/release-notes.md
           --outputDir Releases
           --channel win
+          --delta none
           --msi
           --instLocation Either
 

@@ -161,6 +161,7 @@ if (-not $SkipDownload) {
     }
 }
 
+# 关闭增量包：zstd 在处理中文文件名（如 数据匹配助手_ExecutionStub.exe）时会失败。
 $packArgs = @(
     "pack",
     "--packId", $PackId,
@@ -172,6 +173,7 @@ $packArgs = @(
     "--icon", $iconPath,
     "--outputDir", $outputDir,
     "--channel", "win",
+    "--delta", "none",
     "--msi",
     "--instLocation", "Either"
 )
